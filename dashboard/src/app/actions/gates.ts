@@ -8,10 +8,12 @@ export async function toggleGate(
   enabled: boolean
 ): Promise<void> {
   const supabase = await createClient()
-  const { error } = await supabase.from('gate_config').upsert(
-    { gate_number: gateNumber, niche_id: nicheId, enabled },
-    { onConflict: 'gate_number,niche_id' }
-  )
+  // PostgreSQL NULL != NULL, so ON CONFLICT won't fire for global rows (niche_id IS NULL).
+  // Global rows are seeded at migration time — use UPDATE for them.
+  const query = nicheId === null
+    ? supabase.from('gate_config').update({ enabled }).eq('gate_number', gateNumber).is('niche_id', null)
+    : supabase.from('gate_config').upsert({ gate_number: gateNumber, niche_id: nicheId, enabled }, { onConflict: 'gate_number,niche_id' })
+  const { error } = await query
   if (error) throw new Error(error.message)
   revalidatePath('/', 'layout')
 }

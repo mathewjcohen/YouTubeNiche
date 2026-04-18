@@ -1,0 +1,10 @@
+{
+  "legal": { "min": 20, "max": 50, "keywords": ["lawsuit", "rights", "attorney", "legal", "court"] },
+  "insurance": { "min": 25, "max": 45, "keywords": ["insurance", "policy", "claim", "coverage", "premium"] },
+  "tax": { "min": 20, "max": 40, "keywords": ["tax", "irs", "refund", "deduction", "filing", "accounting"] },
+  "personal_finance": { "min": 15, "max": 35, "keywords": ["money", "budget", "debt", "credit", "savings", "investing"] },
+  "real_estate": { "min": 15, "max": 30, "keywords": ["mortgage", "property", "rent", "landlord", "housing"] },
+  "career": { "min": 10, "max": 20, "keywords": ["salary", "job", "resume", "interview", "negotiation", "career"] },
+  "ai_tech": { "min": 10, "max": 25, "keywords": ["ai", "chatgpt", "automation", "software", "tech", "tool"] },
+  "health": { "min": 8, "max": 20, "keywords": ["health", "medical", "doctor", "treatment", "wellness", "symptom"] }
+}

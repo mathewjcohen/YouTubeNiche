@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 from googleapiclient.discovery import build
 from supabase import Client, create_client
@@ -55,7 +56,7 @@ class AnalyticsPoller:
         self._yt = build_youtube_service()
         self._analytics = build("youtubeAnalytics", "v2", credentials=self._yt._http.credentials)
 
-    def poll_niche(self, niche_id: str, channel_id: str):
+    def poll_niche(self, niche_id: str, channel_id: str) -> Optional[NichePerformance]:
         try:
             end_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             start_date = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")

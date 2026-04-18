@@ -2,7 +2,7 @@ import anthropic
 from agents.shared.config_loader import get_env
 
 def get_client() -> anthropic.Anthropic:
-    return anthropic.Anthropic(api_key=get_env("ANTHROPIC_API_KEY"))
+    return anthropic.Anthropic(api_key=get_env("ANTHROPIC_API_KEY"), max_retries=3)
 
 def complete(prompt: str, model: str = "claude-haiku-4-5-20251001", max_tokens: int = 1024) -> str:
     client = get_client()

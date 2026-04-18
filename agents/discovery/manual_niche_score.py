@@ -9,6 +9,7 @@ from agents.discovery.niche_scorer import NicheScorer
 from agents.discovery.youtube_client import YouTubeClient
 from agents.discovery.reddit_scraper import RedditScraper
 from agents.shared.config_loader import get_env, get_subreddits
+from agents.shared.db_retry import execute_with_retry
 
 
 def main():
@@ -30,7 +31,7 @@ def main():
     print(f"  RPM: ${result.rpm_min}–${result.rpm_max}")
     print(f"  trend={result.trend_score} reddit={result.reddit_activity} competition={result.youtube_competition}")
 
-    sb.table("niches").upsert(
+    execute_with_retry(sb.table("niches").upsert(
         {
             "name": result.niche_name,
             "category": result.category,
@@ -43,7 +44,7 @@ def main():
             "gate1_state": "awaiting_review",
         },
         on_conflict="name",
-    ).execute()
+    ))
     print("[manual-score] written to Supabase. Check dashboard Niches page.")
 
 

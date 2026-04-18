@@ -6,6 +6,7 @@ from googleapiclient.discovery import build
 from supabase import Client, create_client
 
 from agents.shared.config_loader import get_env
+from agents.shared.db_retry import execute_with_retry
 from agents.production.uploader import build_youtube_service
 
 # Promotion thresholds (at 60-day review)
@@ -84,13 +85,11 @@ class AnalyticsPoller:
             return None
 
     def run(self) -> None:
-        testing_niches = (
+        testing_niches = execute_with_retry(
             self._sb.table("niches")
             .select("*")
             .eq("status", "testing")
-            .execute()
-            .data
-        )
+        ).data
         for niche in testing_niches:
             brand = niche.get("brand_package") or {}
             channel_id = brand.get("channel_id")
@@ -102,7 +101,7 @@ class AnalyticsPoller:
             if not perf:
                 continue
 
-            self._sb.table("niche_analytics").insert(
+            execute_with_retry(self._sb.table("niche_analytics").insert(
                 {
                     "niche_id": niche["id"],
                     "views_total": perf.views_total,
@@ -110,7 +109,7 @@ class AnalyticsPoller:
                     "avg_watch_time_pct": perf.avg_watch_time_pct,
                     "early_promotion_flagged": should_flag_early(perf),
                 }
-            ).execute()
+            ))
 
             activated_at = niche.get("activated_at")
             if activated_at:
@@ -118,10 +117,10 @@ class AnalyticsPoller:
                 days_active = (datetime.now(timezone.utc) - activated).days
                 if days_active >= 60:
                     if should_promote(perf):
-                        self._sb.table("niches").update({"status": "promoted"}).eq("id", niche["id"]).execute()
+                        execute_with_retry(self._sb.table("niches").update({"status": "promoted"}).eq("id", niche["id"]))
                         print(f"[analytics] PROMOTED: {niche['name']}")
                     elif should_archive(perf):
-                        self._sb.table("niches").update({"status": "archived"}).eq("id", niche["id"]).execute()
+                        execute_with_retry(self._sb.table("niches").update({"status": "archived"}).eq("id", niche["id"]))
                         print(f"[analytics] ARCHIVED: {niche['name']}")
 
             if should_flag_early(perf):

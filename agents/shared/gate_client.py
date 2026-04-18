@@ -1,6 +1,7 @@
 from enum import IntEnum
 from typing import Optional
 from supabase import Client
+from agents.shared.db_retry import execute_with_retry
 
 class GateNumber(IntEnum):
     NICHE_ACTIVATION = 1
@@ -16,30 +17,28 @@ class GateClient:
 
     def gate_enabled(self, gate: GateNumber, niche_id: Optional[str] = None) -> bool:
         if niche_id:
-            result = (
+            result = execute_with_retry(
                 self._sb.table("gate_config")
                 .select("enabled")
                 .eq("niche_id", niche_id)
                 .eq("gate_number", int(gate))
                 .limit(1)
-                .execute()
             )
             if result.data:
                 return result.data[0]["enabled"]
-        result = (
+        result = execute_with_retry(
             self._sb.table("gate_config")
             .select("enabled")
             .eq("gate_number", int(gate))
             .is_("niche_id", "null")
             .limit(1)
-            .execute()
         )
         if result.data:
             return result.data[0]["enabled"]
         return True
 
     def set_item_gate_state(self, table: str, item_id: str, gate_column: str, state: str) -> None:
-        self._sb.table(table).update({gate_column: state}).eq("id", item_id).execute()
+        execute_with_retry(self._sb.table(table).update({gate_column: state}).eq("id", item_id))
 
     def advance_or_pause(self, gate: GateNumber, niche_id: str, table: str, item_id: str,
                          gate_column: str, auto_state: str = "approved",

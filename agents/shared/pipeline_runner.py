@@ -1,6 +1,7 @@
 from supabase import Client, create_client
 from agents.shared.gate_client import GateClient
 from agents.shared.config_loader import get_env
+from agents.shared.db_retry import execute_with_retry
 
 
 class PipelineRunner:
@@ -9,71 +10,42 @@ class PipelineRunner:
         self._gate = gate_client
 
     def run(self) -> None:
-        active_niches = (
-            self._sb.table("niches")
-            .select("*")
-            .eq("status", "testing")
-            .execute()
-            .data
-        ) + (
-            self._sb.table("niches")
-            .select("*")
-            .eq("status", "promoted")
-            .execute()
-            .data
-        )
+        active_niches = execute_with_retry(
+            self._sb.table("niches").select("*").eq("status", "testing")
+        ).data + execute_with_retry(
+            self._sb.table("niches").select("*").eq("status", "promoted")
+        ).data
         for niche in active_niches:
             self._process_niche(niche)
 
     def _process_niche(self, niche: dict) -> None:
         niche_id = niche["id"]
 
-        approved_topics = (
-            self._sb.table("topics")
-            .select("id")
-            .eq("niche_id", niche_id)
-            .eq("gate2_state", "approved")
-            .eq("status", "pending")
-            .execute()
-            .data
-        )
+        approved_topics = execute_with_retry(
+            self._sb.table("topics").select("id")
+            .eq("niche_id", niche_id).eq("gate2_state", "approved").eq("status", "pending")
+        ).data
         if approved_topics:
             self._run_scriptwriter(niche)
 
-        approved_scripts = (
-            self._sb.table("scripts")
-            .select("id")
-            .eq("niche_id", niche_id)
-            .eq("gate3_state", "approved")
-            .eq("status", "pending")
-            .execute()
-            .data
-        )
+        approved_scripts = execute_with_retry(
+            self._sb.table("scripts").select("id")
+            .eq("niche_id", niche_id).eq("gate3_state", "approved").eq("status", "pending")
+        ).data
         if approved_scripts:
             self._run_voiceover(niche)
 
-        gate4_approved = (
-            self._sb.table("videos")
-            .select("id")
-            .eq("niche_id", niche_id)
-            .eq("gate4_state", "approved")
-            .eq("status", "pending")
-            .execute()
-            .data
-        )
+        gate4_approved = execute_with_retry(
+            self._sb.table("videos").select("id")
+            .eq("niche_id", niche_id).eq("gate4_state", "approved").eq("status", "pending")
+        ).data
         if gate4_approved:
             self._run_video_assembler(niche)
 
-        upload_ready = (
-            self._sb.table("videos")
-            .select("id")
-            .eq("niche_id", niche_id)
-            .eq("gate5_state", "approved")
-            .eq("gate6_state", "approved")
-            .eq("status", "approved")
-            .execute()
-            .data
-        )
+        upload_ready = execute_with_retry(
+            self._sb.table("videos").select("id")
+            .eq("niche_id", niche_id).eq("gate5_state", "approved").eq("gate6_state", "approved").eq("status", "approved")
+        ).data
         if upload_ready:
             self._run_uploader(niche)
 

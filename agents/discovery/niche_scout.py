@@ -6,6 +6,7 @@ from agents.discovery.youtube_client import YouTubeClient
 from agents.discovery.reddit_scraper import RedditScraper
 from agents.shared.gate_client import GateClient
 from agents.shared.config_loader import get_env, get_subreddits
+from agents.shared.db_retry import execute_with_retry
 
 
 CATEGORY_QUERIES = {
@@ -30,7 +31,7 @@ class NicheScout:
         subreddits_map = get_subreddits()
         existing = {
             row["name"]
-            for row in self._sb.table("niches").select("name").execute().data
+            for row in execute_with_retry(self._sb.table("niches").select("name")).data
         }
 
         results: List[NicheScoreResult] = []
@@ -47,7 +48,7 @@ class NicheScout:
         for r in results[:5]:
             if r.niche_name in existing:
                 continue
-            self._sb.table("niches").upsert(
+            execute_with_retry(self._sb.table("niches").upsert(
                 {
                     "name": r.niche_name,
                     "category": r.category,
@@ -60,7 +61,7 @@ class NicheScout:
                     "gate1_state": "awaiting_review",
                 },
                 on_conflict="name",
-            ).execute()
+            ))
         print(f"[scout] done. top candidates queued: {min(5, len(results))}")
 
 

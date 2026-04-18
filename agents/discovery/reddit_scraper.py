@@ -82,14 +82,15 @@ def main():
     from agents.shared.config_loader import get_env, get_subreddits
     from agents.shared.anthropic_client import complete
     from agents.shared.gate_client import GateClient, GateNumber
+    from agents.shared.db_retry import execute_with_retry
 
     sb = create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY"))
     gate = GateClient(sb)
     scraper = RedditScraper()
     subreddits_map = get_subreddits()
 
-    active_niches = sb.table("niches").select("*").in_("status", ["testing", "promoted"]).execute().data
-    known_ids = {row["reddit_post_id"] for row in sb.table("topics").select("reddit_post_id").execute().data}
+    active_niches = execute_with_retry(sb.table("niches").select("*").in_("status", ["testing", "promoted"])).data
+    known_ids = {row["reddit_post_id"] for row in execute_with_retry(sb.table("topics").select("reddit_post_id")).data}
 
     for niche in active_niches:
         subs = niche.get("subreddits") or subreddits_map.get(niche["category"], [])
@@ -103,7 +104,7 @@ def main():
             except Exception:
                 claude_score = 5.0
 
-            result = sb.table("topics").insert({
+            result = execute_with_retry(sb.table("topics").insert({
                 "niche_id": niche["id"],
                 "reddit_post_id": post.post_id,
                 "title": post.title,
@@ -113,7 +114,7 @@ def main():
                 "claude_score": claude_score,
                 "status": "pending",
                 "gate2_state": "pending",
-            }).execute()
+            }))
             topic_id = result.data[0]["id"]
             gate.advance_or_pause(
                 gate=GateNumber.TOPIC_SELECTION,

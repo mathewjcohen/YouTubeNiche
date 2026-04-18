@@ -21,7 +21,7 @@ def patch_postgrest_http1(sb):
         http2=False,
         follow_redirects=True,
     )
-    sb.postgrest = SyncPostgrestClient(rest_url, http_client=session)
+    sb._postgrest = SyncPostgrestClient(rest_url, http_client=session)
     return sb
 
 

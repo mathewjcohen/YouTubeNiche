@@ -45,7 +45,11 @@ class PexelsClient:
         return urls
 
     def download_clip(self, url: str, dest_path: Path) -> Path:
-        urllib.request.urlretrieve(url, str(dest_path))
+        resp = requests.get(url, headers=self._headers, stream=True, timeout=60)
+        resp.raise_for_status()
+        with dest_path.open("wb") as f:
+            for chunk in resp.iter_content(chunk_size=1 << 20):
+                f.write(chunk)
         return dest_path
 
 

@@ -10,8 +10,9 @@ def patch_postgrest_http1(sb):
     PostgREST builds absolute request URLs, so the replacement session needs no base_url.
     """
     pg = sb.postgrest  # trigger lazy init; auth headers populated via supabase options
+    old_headers = dict(pg.session.headers)
     pg.session.close()
-    pg.session = httpx.Client(http2=False, follow_redirects=True)
+    pg.session = httpx.Client(http2=False, follow_redirects=True, headers=old_headers)
     return sb
 
 

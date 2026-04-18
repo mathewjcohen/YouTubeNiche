@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def get_env(key: str, required: bool = True) -> str:
-    val = os.getenv(key, "")
+    val = os.getenv(key, "").strip()
     if required and not val:
         raise EnvironmentError(f"Missing required env var: {key}")
     return val

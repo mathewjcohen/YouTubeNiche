@@ -82,9 +82,9 @@ def main():
     from agents.shared.config_loader import get_env, get_subreddits
     from agents.shared.anthropic_client import complete
     from agents.shared.gate_client import GateClient, GateNumber
-    from agents.shared.db_retry import execute_with_retry
+    from agents.shared.db_retry import execute_with_retry, patch_postgrest_http1
 
-    sb = create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY"))
+    sb = patch_postgrest_http1(create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY")))
     gate = GateClient(sb)
     scraper = RedditScraper()
     subreddits_map = get_subreddits()

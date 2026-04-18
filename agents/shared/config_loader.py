@@ -9,6 +9,12 @@ def get_env(key: str, required: bool = True) -> str:
     val = os.getenv(key, "").strip()
     if required and not val:
         raise EnvironmentError(f"Missing required env var: {key}")
+    invalid = [i for i, c in enumerate(val) if (ord(c) < 0x20 and c != "\t") or ord(c) == 0x7F]
+    if invalid:
+        raise EnvironmentError(
+            f"{key} contains {len(invalid)} invalid control char(s) at position(s) {invalid[:5]} "
+            f"(key length={len(val)}). Re-enter in GitHub Settings → Secrets — no embedded newlines."
+        )
     return val
 
 def load_json_config(filename: str) -> dict:

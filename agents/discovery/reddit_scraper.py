@@ -74,3 +74,58 @@ class RedditScraper:
 
     def deduplicate(self, posts: list[RedditPost], known_ids: set[str]) -> list[RedditPost]:
         return [p for p in posts if p.post_id not in known_ids]
+
+
+def main():
+    from supabase import create_client
+    from agents.shared.config_loader import get_env, get_subreddits
+    from agents.shared.anthropic_client import complete
+    from agents.shared.gate_client import GateClient, GateNumber
+
+    sb = create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY"))
+    gate = GateClient(sb)
+    scraper = RedditScraper()
+    subreddits_map = get_subreddits()
+
+    active_niches = sb.table("niches").select("*").in_("status", ["testing", "promoted"]).execute().data
+    known_ids = {row["reddit_post_id"] for row in sb.table("topics").select("reddit_post_id").execute().data}
+
+    for niche in active_niches:
+        subs = niche.get("subreddits") or subreddits_map.get(niche["category"], [])
+        posts = scraper.fetch_all_for_niche(subs)
+        posts = scraper.deduplicate(posts, known_ids)
+        for post in posts[:10]:
+            score_prompt = f"Rate this Reddit post for YouTube video potential (1-10). Title: {post.title}\nBody excerpt: {post.body[:300]}\nReturn only the integer score."
+            try:
+                score_str = complete(score_prompt, model="claude-haiku-4-5-20251001", max_tokens=10)
+                claude_score = float(score_str.strip())
+            except Exception:
+                claude_score = 5.0
+
+            result = sb.table("topics").insert({
+                "niche_id": niche["id"],
+                "reddit_post_id": post.post_id,
+                "title": post.title,
+                "url": post.url,
+                "body": post.body,
+                "upvotes": post.score,
+                "claude_score": claude_score,
+                "status": "pending",
+                "gate2_state": "pending",
+            }).execute()
+            topic_id = result.data[0]["id"]
+            gate.advance_or_pause(
+                gate=GateNumber.TOPIC_SELECTION,
+                niche_id=niche["id"],
+                table="topics",
+                item_id=topic_id,
+                gate_column="gate2_state",
+                auto_state="approved",
+                review_state="awaiting_review",
+            )
+            known_ids.add(post.post_id)
+    print(f"[reddit-scraper] done for {len(active_niches)} active niches")
+
+
+if __name__ == "__main__":
+    main()

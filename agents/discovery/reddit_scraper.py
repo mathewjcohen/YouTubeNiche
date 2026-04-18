@@ -3,7 +3,7 @@ import requests
 import time
 
 
-HEADERS = {"User-Agent": "TrackC-Bot/1.0"}
+HEADERS = {"User-Agent": "YouTubeNiche-Bot/1.0"}
 
 
 @dataclass

@@ -1,0 +1,45 @@
+name: Manual Niche Score
+
+on:
+  workflow_dispatch:
+    inputs:
+      niche:
+        description: "Niche name or search query"
+        required: true
+        type: string
+      category:
+        description: "Category (legal/insurance/tax/personal_finance/real_estate/career/ai_tech/health)"
+        required: true
+        type: choice
+        options:
+          - legal
+          - insurance
+          - tax
+          - personal_finance
+          - real_estate
+          - career
+          - ai_tech
+          - health
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Score niche
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+        run: |
+          python -m agents.discovery.manual_niche_score \
+            --niche "${{ github.event.inputs.niche }}" \
+            --category "${{ github.event.inputs.category }}"

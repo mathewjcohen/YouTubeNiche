@@ -23,7 +23,7 @@ export interface Niche {
   status: NicheStatus
   gate1_state: GateState
   niche_source: NicheSource
-  niche_score: number | null
+  score: number | null
   brand_package: BrandPackage | null
   activated_at: string | null
   channel_id: string | null

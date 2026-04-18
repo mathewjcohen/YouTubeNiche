@@ -15,7 +15,7 @@ export default async function NichesPage() {
   const { data: niches } = await supabase
     .from('niches')
     .select('*')
-    .order('niche_score', { ascending: false })
+    .order('score', { ascending: false })
 
   const grouped = STATUS_ORDER.reduce<Record<NicheStatus, Niche[]>>(
     (acc, s) => ({ ...acc, [s]: [] }),
@@ -87,8 +87,8 @@ function NicheRow({ niche }: { niche: Niche }) {
         <p className="font-medium">{niche.name}</p>
         <p className="text-xs text-gray-400">{niche.category}{niche.niche_source === 'manual' ? ' · [manual]' : ''}</p>
       </div>
-      {niche.niche_score != null && (
-        <span className="text-sm text-gray-600">Score: {niche.niche_score.toFixed(2)}</span>
+      {niche.score != null && (
+        <span className="text-sm text-gray-600">Score: {niche.score.toFixed(2)}</span>
       )}
       <div className="flex gap-2">
         {niche.gate1_state === 'awaiting_review' && (

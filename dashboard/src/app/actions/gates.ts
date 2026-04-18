@@ -22,16 +22,22 @@ export async function getGateConfig(
 ): Promise<boolean> {
   const supabase = await createClient()
   const DEFAULT_ON = [1, 3, 5, 6]
-  const query = supabase
-    .from('gate_config')
-    .select('gate_enabled')
-    .eq('gate_number', gateNumber)
 
   if (nicheId) {
-    const { data } = await query.eq('niche_id', nicheId).single()
+    const { data } = await supabase
+      .from('gate_config')
+      .select('gate_enabled')
+      .eq('gate_number', gateNumber)
+      .eq('niche_id', nicheId)
+      .single()
     if (data) return data.gate_enabled
   }
 
-  const { data } = await query.is('niche_id', null).single()
+  const { data } = await supabase
+    .from('gate_config')
+    .select('gate_enabled')
+    .eq('gate_number', gateNumber)
+    .is('niche_id', null)
+    .single()
   return data ? data.gate_enabled : DEFAULT_ON.includes(gateNumber)
 }

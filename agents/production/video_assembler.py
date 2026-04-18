@@ -78,11 +78,15 @@ class VideoAssembler:
         if not tags:
             tags = ["nature background", "city timelapse", "office work"]
 
-        audio = AudioFileClip(audio_path)
-        total_duration = audio.duration
-        clip_duration = total_duration / max(len(tags), 1)
-
         with tempfile.TemporaryDirectory() as tmpdir:
+            if audio_path.startswith("http"):
+                local_audio = Path(tmpdir) / "audio.mp3"
+                urllib.request.urlretrieve(audio_path, str(local_audio))
+                audio_path = str(local_audio)
+
+            audio = AudioFileClip(audio_path)
+            total_duration = audio.duration
+            clip_duration = total_duration / max(len(tags), 1)
             clips = []
             for i, tag in enumerate(tags):
                 urls = self._pexels.search_video_urls(tag, count=1)

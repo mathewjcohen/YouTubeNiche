@@ -93,6 +93,13 @@ class VoiceoverAgent:
         srt_path.write_text(srt_content, encoding="utf-8")
         return audio_path, srt_path
 
+    def _upload(self, local_path: Path, content_type: str) -> str:
+        storage_key = local_path.name
+        self._sb.storage.from_("voiceovers").upload(
+            storage_key, local_path.read_bytes(), {"content-type": content_type}
+        )
+        return self._sb.storage.from_("voiceovers").get_public_url(storage_key)
+
     def process_approved_scripts(self, niche_id: str) -> None:
         scripts = execute_with_retry(
             self._sb.table("scripts")
@@ -105,6 +112,8 @@ class VoiceoverAgent:
             for video_type, text in [("long", script["long_form_text"]), ("short", script["short_text"])]:
                 stem = f"{script['id'][:8]}_{video_type}"
                 audio_path, srt_path = asyncio.run(self.synthesize(text, stem))
+                audio_url = self._upload(audio_path, "audio/mpeg")
+                srt_url = self._upload(srt_path, "text/plain")
 
                 result = execute_with_retry(
                     self._sb.table("videos").insert(
@@ -112,8 +121,8 @@ class VoiceoverAgent:
                             "script_id": script["id"],
                             "niche_id": niche_id,
                             "video_type": video_type,
-                            "audio_path": str(audio_path),
-                            "srt_path": str(srt_path),
+                            "audio_path": audio_url,
+                            "srt_path": srt_url,
                             "status": "pending",
                             "gate4_state": "pending",
                         }

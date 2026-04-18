@@ -25,11 +25,11 @@ export default async function SettingsPage() {
     const row = (configs as GateConfig[] | null)?.find(
       (c) => c.gate_number === gate && c.niche_id === nicheId
     )
-    if (row) return row.gate_enabled
+    if (row) return row.enabled
     const globalRow = (configs as GateConfig[] | null)?.find(
       (c) => c.gate_number === gate && c.niche_id === null
     )
-    return globalRow ? globalRow.gate_enabled : DEFAULT_ON.has(gate)
+    return globalRow ? globalRow.enabled : DEFAULT_ON.has(gate)
   }
 
   const scopes = [

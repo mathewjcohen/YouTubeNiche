@@ -25,7 +25,7 @@ export default async function AnalyticsPage() {
     .from('niche_analytics')
     .select('*')
     .in('niche_id', nicheIds)
-    .order('measured_at', { ascending: false })
+    .order('polled_at', { ascending: false })
 
   const latestByNiche: Record<string, NicheAnalytics> = {}
   for (const row of analytics ?? []) {
@@ -54,7 +54,7 @@ export default async function AnalyticsPage() {
                 <p className="text-sm text-gray-400">No analytics yet.</p>
               ) : (
                 <div className="grid grid-cols-4 gap-4">
-                  <Metric label="Views (7d)" value={latest.views_7d.toLocaleString()} />
+                  <Metric label="Views (total)" value={latest.views_total.toLocaleString()} />
                   <Metric
                     label="CTR"
                     value={`${(latest.ctr * 100).toFixed(1)}%`}
@@ -65,7 +65,7 @@ export default async function AnalyticsPage() {
                     value={`${(latest.avg_watch_time_pct * 100).toFixed(0)}%`}
                     highlight={latest.avg_watch_time_pct >= 0.35}
                   />
-                  <Metric label="Subs Gained" value={`+${latest.subs_gained}`} />
+                  <Metric label="Subs (total)" value={latest.subs_total.toLocaleString()} />
                 </div>
               )}
             </div>

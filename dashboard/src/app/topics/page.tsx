@@ -8,7 +8,7 @@ export default async function TopicsPage() {
     .from('topics')
     .select('*, niches(name)')
     .eq('gate2_state', 'awaiting_review')
-    .order('video_potential_score', { ascending: false })
+    .order('claude_score', { ascending: false })
 
   return (
     <div>
@@ -35,7 +35,7 @@ function TopicCard({ topic }: { topic: Topic & { niches: { name: string } } }) {
         <div className="flex-1">
           <p className="font-semibold">{topic.title}</p>
           <p className="text-xs text-gray-400 mt-0.5">
-            r/{topic.subreddit} · niche: {topic.niches?.name} · score: {topic.video_potential_score?.toFixed(1) ?? '—'}
+            niche: {topic.niches?.name} · score: {topic.claude_score?.toFixed(1) ?? '—'}
           </p>
           <p className="text-sm text-gray-600 mt-2 line-clamp-3">{topic.body}</p>
         </div>

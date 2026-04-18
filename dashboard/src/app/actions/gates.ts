@@ -9,7 +9,7 @@ export async function toggleGate(
 ): Promise<void> {
   const supabase = await createClient()
   const { error } = await supabase.from('gate_config').upsert(
-    { gate_number: gateNumber, niche_id: nicheId, gate_enabled: enabled },
+    { gate_number: gateNumber, niche_id: nicheId, enabled },
     { onConflict: 'gate_number,niche_id' }
   )
   if (error) throw new Error(error.message)
@@ -26,18 +26,18 @@ export async function getGateConfig(
   if (nicheId) {
     const { data } = await supabase
       .from('gate_config')
-      .select('gate_enabled')
+      .select('enabled')
       .eq('gate_number', gateNumber)
       .eq('niche_id', nicheId)
       .single()
-    if (data) return data.gate_enabled
+    if (data) return data.enabled
   }
 
   const { data } = await supabase
     .from('gate_config')
-    .select('gate_enabled')
+    .select('enabled')
     .eq('gate_number', gateNumber)
     .is('niche_id', null)
     .single()
-  return data ? data.gate_enabled : DEFAULT_ON.includes(gateNumber)
+  return data ? data.enabled : DEFAULT_ON.includes(gateNumber)
 }

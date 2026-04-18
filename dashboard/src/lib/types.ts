@@ -26,7 +26,6 @@ export interface Niche {
   score: number | null
   brand_package: BrandPackage | null
   activated_at: string | null
-  channel_id: string | null
   created_at: string
 }
 
@@ -35,9 +34,9 @@ export interface Topic {
   niche_id: string
   title: string
   body: string
-  subreddit: string
   reddit_post_id: string
-  video_potential_score: number | null
+  url: string
+  claude_score: number | null
   gate2_state: GateState
   rejection_reason: string | null
   created_at: string
@@ -79,18 +78,18 @@ export interface GateConfig {
   id: string
   niche_id: string | null
   gate_number: number
-  gate_enabled: boolean
+  enabled: boolean
   updated_at: string
 }
 
 export interface NicheAnalytics {
   id: string
   niche_id: string
-  measured_at: string
-  views_7d: number
+  polled_at: string
+  views_total: number
   ctr: number
   avg_watch_time_pct: number
-  subs_gained: number
+  subs_total: number
   early_promotion_flagged: boolean
 }
 

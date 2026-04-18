@@ -99,6 +99,7 @@ class VoiceoverAgent:
             .select("*")
             .eq("niche_id", niche_id)
             .eq("gate3_state", "approved")
+            .eq("status", "pending")
         ).data
         for script in scripts:
             for video_type, text in [("long", script["long_form_text"]), ("short", script["short_text"])]:
@@ -131,3 +132,6 @@ class VoiceoverAgent:
                     auto_state="approved",
                     review_state="awaiting_review",
                 )
+            execute_with_retry(
+                self._sb.table("scripts").update({"status": "processing"}).eq("id", script["id"])
+            )

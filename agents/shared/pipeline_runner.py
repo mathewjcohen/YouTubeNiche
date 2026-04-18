@@ -33,6 +33,7 @@ class PipelineRunner:
             .eq("niche_id", niche_id).eq("gate3_state", "approved").eq("status", "pending")
         ).data
         if approved_scripts:
+            self._run_thumbnail_gen(niche)
             self._run_voiceover(niche)
 
         gate4_approved = execute_with_retry(
@@ -48,6 +49,11 @@ class PipelineRunner:
         ).data
         if upload_ready:
             self._run_uploader(niche)
+
+    def _run_thumbnail_gen(self, niche: dict) -> None:
+        from agents.production.thumbnail_gen import ThumbnailGenerator
+        gen = ThumbnailGenerator(supabase=self._sb, gate_client=self._gate)
+        gen.process_approved_scripts(niche["id"])
 
     def _run_scriptwriter(self, niche: dict) -> None:
         from agents.production.scriptwriter import Scriptwriter

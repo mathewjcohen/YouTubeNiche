@@ -14,10 +14,10 @@ function rejectionColumn(gate: MediaGate): string {
 
 export async function approveMedia(id: string, gate: MediaGate): Promise<void> {
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('videos')
-    .update({ [gateColumn(gate)]: 'approved' })
-    .eq('id', id)
+  const update: Record<string, string> = { [gateColumn(gate)]: 'approved' }
+  // Gate 6 is the final approval — mark video ready for upload
+  if (gate === 6) update.status = 'approved'
+  const { error } = await supabase.from('videos').update(update).eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/media')
 }

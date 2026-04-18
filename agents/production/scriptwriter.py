@@ -127,7 +127,7 @@ class Scriptwriter:
             .select("*")
             .eq("niche_id", niche_id)
             .eq("gate2_state", "approved")
-            .eq("status", "approved")
+            .eq("status", "pending")
         ).data
         niche_rows = execute_with_retry(
             self._sb.table("niches").select("name,category").eq("id", niche_id).limit(1)

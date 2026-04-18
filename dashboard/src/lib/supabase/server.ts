@@ -1,5 +1,7 @@
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient, type CookieMethodsServer } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+
+type SetAllPairs = Parameters<NonNullable<CookieMethodsServer['setAll']>>[0]
 
 export async function createClient() {
   const cookieStore = await cookies()
@@ -9,7 +11,7 @@ export async function createClient() {
     {
       cookies: {
         getAll: () => cookieStore.getAll(),
-        setAll: (pairs) => {
+        setAll: (pairs: SetAllPairs) => {
           pairs.forEach(({ name, value, options }) =>
             cookieStore.set(name, value, options)
           )

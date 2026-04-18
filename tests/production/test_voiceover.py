@@ -1,5 +1,4 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 from agents.production.voiceover import VoiceoverAgent, WordTimestamp, build_srt
 
@@ -14,6 +13,12 @@ def test_build_srt_formats_correctly():
     assert "00:00:00,000" in srt
     assert "Hello world" in srt
     assert "this" in srt
+    # Validate actual SRT structure
+    lines = srt.split("\n")
+    assert lines[0] == "1"
+    assert "-->" in lines[1]
+    assert "Hello world" in lines[2]
+    assert lines[3] == ""
 
 
 def test_build_srt_empty_words_returns_empty():

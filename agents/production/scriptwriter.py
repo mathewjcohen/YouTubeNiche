@@ -141,7 +141,8 @@ class Scriptwriter:
             ),
             max_tokens=300,
         )
-        lines = [l.strip() for l in meta_raw.strip().split("\n") if l.strip()]
+        import re
+        lines = [re.sub(r'^Line \d+:\s*', '', l.strip()) for l in meta_raw.strip().split("\n") if l.strip()]
         title = lines[0] if len(lines) > 0 else topic_title[:70]
         base_description = lines[1] if len(lines) > 1 else ""
         tags = [t.strip() for t in lines[2].split(",") if t.strip()] if len(lines) > 2 else []

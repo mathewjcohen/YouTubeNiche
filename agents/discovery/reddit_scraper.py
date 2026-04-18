@@ -115,6 +115,9 @@ def main():
                 "status": "pending",
                 "gate2_state": "pending",
             }))
+            if not result.data:
+                print(f"[reddit] insert returned no data for post {post.post_id}, skip")
+                continue
             topic_id = result.data[0]["id"]
             gate.advance_or_pause(
                 gate=GateNumber.TOPIC_SELECTION,

@@ -69,7 +69,7 @@ class AnalyticsPoller:
                 dimensions="day",
             ).execute()
             rows = result.get("rows", [])
-            if not rows:
+            if not rows or len(rows[0]) < 5:
                 return None
             total_views = sum(int(r[1]) for r in rows)
             avg_ctr = sum(float(r[4]) for r in rows) / len(rows) / 100

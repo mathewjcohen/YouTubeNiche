@@ -10,6 +10,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from supabase import Client
 
 from agents.shared.gate_client import GateClient
+from agents.shared.db_retry import execute_with_retry
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
@@ -81,24 +82,27 @@ class YouTubeUploader:
 
         video_id = response["id"]
 
-        # Upload thumbnail
-        thumb_media = MediaFileUpload(thumbnail_path, mimetype="image/jpeg")
-        self._yt.thumbnails().set(videoId=video_id, media_body=thumb_media).execute()
+        if thumbnail_path and Path(thumbnail_path).exists():
+            thumb_media = MediaFileUpload(thumbnail_path, mimetype="image/jpeg")
+            self._yt.thumbnails().set(videoId=video_id, media_body=thumb_media).execute()
+        elif thumbnail_path:
+            print(f"[uploader] thumbnail not found, skipping: {thumbnail_path}")
 
         return video_id
 
     def process_approved_videos(self, niche_id: str) -> None:
-        videos = (
+        videos = execute_with_retry(
             self._sb.table("videos")
             .select("*, scripts(youtube_title, youtube_description, youtube_tags)")
             .eq("niche_id", niche_id)
             .eq("gate6_state", "approved")
             .eq("status", "approved")
-            .execute()
-            .data
-        )
+        ).data
         for video in videos:
-            script = video["scripts"]
+            script = video.get("scripts")
+            if not script:
+                print(f"[uploader] video {video['id']} has no linked script, skip")
+                continue
             try:
                 yt_id = self.upload(
                     video_path=video["video_path"],
@@ -108,9 +112,11 @@ class YouTubeUploader:
                     tags=script.get("youtube_tags", []),
                     is_short=video["video_type"] == "short",
                 )
-                self._sb.table("videos").update(
-                    {"youtube_video_id": yt_id, "status": "uploaded"}
-                ).eq("id", video["id"]).execute()
+                execute_with_retry(
+                    self._sb.table("videos").update(
+                        {"youtube_video_id": yt_id, "status": "uploaded"}
+                    ).eq("id", video["id"])
+                )
                 print(f"[uploader] uploaded {yt_id} ({video['video_type']})")
             except Exception as e:
                 print(f"[uploader] failed for video {video['id']}: {e}")

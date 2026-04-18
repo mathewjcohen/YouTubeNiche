@@ -11,6 +11,7 @@ from moviepy.editor import (
 )
 from supabase import Client
 from agents.shared.gate_client import GateClient
+from agents.shared.db_retry import execute_with_retry
 
 
 BROLL_PATTERN = re.compile(r"\[B-ROLL:\s*(.+?)\]", re.IGNORECASE)
@@ -118,20 +119,22 @@ class VideoAssembler:
             return out_path
 
     def process_approved_voiceovers(self, niche_id: str) -> None:
-        videos = (
+        videos = execute_with_retry(
             self._sb.table("videos")
             .select("*, scripts(long_form_text, short_text)")
             .eq("niche_id", niche_id)
             .eq("gate4_state", "approved")
             .eq("status", "pending")
-            .execute()
-            .data
-        )
+        ).data
         for video in videos:
+            scripts_data = video.get("scripts")
+            if not scripts_data:
+                print(f"[assembler] video {video['id']} has no linked script, skip")
+                continue
             script_text = (
-                video["scripts"]["long_form_text"]
+                scripts_data["long_form_text"]
                 if video["video_type"] == "long"
-                else video["scripts"]["short_text"]
+                else scripts_data["short_text"]
             )
             stem = f"{video['id'][:8]}_{video['video_type']}_assembled"
             out_path = self.assemble(
@@ -140,6 +143,8 @@ class VideoAssembler:
                 script_text=script_text,
                 output_stem=stem,
             )
-            self._sb.table("videos").update(
-                {"video_path": str(out_path), "status": "processing"}
-            ).eq("id", video["id"]).execute()
+            execute_with_retry(
+                self._sb.table("videos").update(
+                    {"video_path": str(out_path), "status": "processing"}
+                ).eq("id", video["id"])
+            )

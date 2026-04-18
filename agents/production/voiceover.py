@@ -5,6 +5,7 @@ from typing import List, Tuple
 import edge_tts
 from supabase import Client
 from agents.shared.gate_client import GateClient, GateNumber
+from agents.shared.db_retry import execute_with_retry
 
 VOICE = "en-US-AriaNeural"
 
@@ -93,22 +94,19 @@ class VoiceoverAgent:
         return audio_path, srt_path
 
     def process_approved_scripts(self, niche_id: str) -> None:
-        scripts = (
+        scripts = execute_with_retry(
             self._sb.table("scripts")
             .select("*")
             .eq("niche_id", niche_id)
             .eq("gate3_state", "approved")
-            .execute()
-            .data
-        )
+        ).data
         for script in scripts:
             for video_type, text in [("long", script["long_form_text"]), ("short", script["short_text"])]:
                 stem = f"{script['id'][:8]}_{video_type}"
                 audio_path, srt_path = asyncio.run(self.synthesize(text, stem))
 
-                result = (
-                    self._sb.table("videos")
-                    .insert(
+                result = execute_with_retry(
+                    self._sb.table("videos").insert(
                         {
                             "script_id": script["id"],
                             "niche_id": niche_id,
@@ -119,8 +117,10 @@ class VoiceoverAgent:
                             "gate4_state": "pending",
                         }
                     )
-                    .execute()
                 )
+                if not result.data:
+                    print(f"[voiceover] insert returned no data for script {script['id']} ({video_type}), skip")
+                    continue
                 video_id = result.data[0]["id"]
                 self._gate.advance_or_pause(
                     gate=GateNumber.VOICEOVER,

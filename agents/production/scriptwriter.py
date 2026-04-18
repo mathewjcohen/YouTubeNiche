@@ -3,6 +3,7 @@ from typing import List, Optional
 from supabase import Client
 from agents.shared.anthropic_client import complete, complete_sonnet
 from agents.shared.gate_client import GateClient, GateNumber
+from agents.shared.db_retry import execute_with_retry
 
 
 LONG_FORM_PROMPT = """You are writing a script for a faceless YouTube video in the {category} niche.
@@ -101,9 +102,8 @@ class Scriptwriter:
         )
 
     def write_to_db(self, pair: ScriptPair, topic_id: str, niche_id: str) -> str:
-        result = (
-            self._sb.table("scripts")
-            .insert(
+        result = execute_with_retry(
+            self._sb.table("scripts").insert(
                 {
                     "topic_id": topic_id,
                     "niche_id": niche_id,
@@ -116,21 +116,26 @@ class Scriptwriter:
                     "gate3_state": "awaiting_review",
                 }
             )
-            .execute()
         )
+        if not result.data:
+            raise RuntimeError(f"Script insert returned no data for topic {topic_id}")
         return result.data[0]["id"]
 
     def process_approved_topics(self, niche_id: str) -> None:
-        topics = (
+        topics = execute_with_retry(
             self._sb.table("topics")
             .select("*")
             .eq("niche_id", niche_id)
             .eq("gate2_state", "approved")
             .eq("status", "approved")
-            .execute()
-            .data
-        )
-        niche = self._sb.table("niches").select("name,category").eq("id", niche_id).limit(1).execute().data[0]
+        ).data
+        niche_rows = execute_with_retry(
+            self._sb.table("niches").select("name,category").eq("id", niche_id).limit(1)
+        ).data
+        if not niche_rows:
+            print(f"[scriptwriter] niche {niche_id} not found, skip")
+            return
+        niche = niche_rows[0]
         for topic in topics:
             pair = self.generate(
                 topic_title=topic["title"],
@@ -148,4 +153,6 @@ class Scriptwriter:
                 auto_state="approved",
                 review_state="awaiting_review",
             )
-            self._sb.table("topics").update({"status": "processing"}).eq("id", topic["id"]).execute()
+            execute_with_retry(
+                self._sb.table("topics").update({"status": "processing"}).eq("id", topic["id"])
+            )

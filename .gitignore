@@ -8,3 +8,5 @@ output/
 venv/
 *.egg-info/
 .pytest_cache/
+config/youtube_oauth_secrets.json
+config/youtube_token.json

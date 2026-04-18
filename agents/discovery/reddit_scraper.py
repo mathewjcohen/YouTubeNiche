@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import List, Set
 import requests
 import time
 
@@ -24,7 +25,7 @@ class RedditScraper:
         min_body_length: int = 300,
         limit: int = 25,
         timeframe: str = "week",
-    ) -> list[RedditPost]:
+    ) -> List[RedditPost]:
         url = f"https://www.reddit.com/r/{subreddit}/top.json"
         resp = requests.get(
             url,
@@ -58,11 +59,11 @@ class RedditScraper:
 
     def fetch_all_for_niche(
         self,
-        subreddits: list[str],
+        subreddits: List[str],
         min_score: int = 500,
         min_body_length: int = 300,
-    ) -> list[RedditPost]:
-        all_posts: list[RedditPost] = []
+    ) -> List[RedditPost]:
+        all_posts: List[RedditPost] = []
         for subreddit in subreddits:
             try:
                 posts = self.fetch_top_posts(subreddit, min_score, min_body_length)
@@ -72,7 +73,7 @@ class RedditScraper:
                 print(f"[reddit] failed for r/{subreddit}: {e}")
         return all_posts
 
-    def deduplicate(self, posts: list[RedditPost], known_ids: set[str]) -> list[RedditPost]:
+    def deduplicate(self, posts: List[RedditPost], known_ids: Set[str]) -> List[RedditPost]:
         return [p for p in posts if p.post_id not in known_ids]
 
 

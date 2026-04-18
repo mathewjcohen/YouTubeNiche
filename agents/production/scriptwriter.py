@@ -46,42 +46,42 @@ Line 2: Description (2 sentences, include the word "{category}" naturally, end w
 Line 3: Tags (8 tags, comma-separated, no spaces around commas)"""
 
 DISCLAIMERS: dict[str, str] = {
-    "Legal / rights": (
+    "legal / rights": (
         "\n\n⚠️ DISCLAIMER: This video is for informational and entertainment purposes only and does "
         "not constitute legal advice. Laws vary by jurisdiction. Always consult a licensed attorney "
         "for advice specific to your situation."
     ),
-    "Insurance": (
+    "insurance": (
         "\n\n⚠️ DISCLAIMER: This video is for informational purposes only and does not constitute "
         "insurance advice. Coverage and policies vary. Consult a licensed insurance professional "
         "before making any decisions."
     ),
-    "Tax / accounting": (
+    "tax / accounting": (
         "\n\n⚠️ DISCLAIMER: This video is for informational purposes only and does not constitute "
         "tax or financial advice. Tax laws vary and change frequently. Consult a licensed CPA or "
         "tax professional for guidance specific to your situation."
     ),
-    "Personal finance": (
+    "personal finance": (
         "\n\n⚠️ DISCLAIMER: This video is for informational and entertainment purposes only and is "
         "not financial advice. Investing involves risk, including possible loss of principal. Consult "
         "a certified financial planner before making financial decisions."
     ),
-    "Real estate": (
+    "real estate": (
         "\n\n⚠️ DISCLAIMER: This video is for informational purposes only and does not constitute "
         "real estate or legal advice. Market conditions vary by location. Consult a licensed real "
         "estate agent or attorney before making real estate decisions."
     ),
-    "Career / salary": (
+    "career / salary": (
         "\n\n⚠️ DISCLAIMER: This video is for informational and entertainment purposes only. "
         "Individual results may vary. Consult a career professional or attorney for advice specific "
         "to your employment situation."
     ),
-    "AI / tech tools": (
+    "ai / tech tools": (
         "\n\n⚠️ DISCLAIMER: This video is for informational purposes only. Technology and AI "
         "capabilities change rapidly. Always verify information with official documentation before "
         "making business or technical decisions."
     ),
-    "Health / medical": (
+    "health / medical": (
         "\n\n⚠️ DISCLAIMER: This video is for informational and entertainment purposes only and does "
         "not constitute medical advice. It is not a substitute for professional medical diagnosis, "
         "treatment, or advice. Always consult a qualified healthcare provider before making any "
@@ -96,7 +96,7 @@ _DEFAULT_DISCLAIMER = (
 
 
 def get_disclaimer(category: str) -> str:
-    return DISCLAIMERS.get(category, _DEFAULT_DISCLAIMER)
+    return DISCLAIMERS.get(category.lower(), _DEFAULT_DISCLAIMER)
 
 
 @dataclass

@@ -45,10 +45,13 @@ class NicheScout:
                 print(f"[scout] failed to score {category}: {e}")
 
         results.sort(key=lambda r: r.final_score, reverse=True)
+        print(f"[scout] existing niches in DB: {len(existing)} — {list(existing)[:5]}")
+        inserted = 0
         for r in results[:5]:
             if r.niche_name in existing:
+                print(f"[scout] skip duplicate: {r.niche_name}")
                 continue
-            execute_with_retry(self._sb.table("niches").upsert(
+            result = execute_with_retry(self._sb.table("niches").upsert(
                 {
                     "name": r.niche_name,
                     "category": r.category,
@@ -62,7 +65,9 @@ class NicheScout:
                 },
                 on_conflict="name",
             ))
-        print(f"[scout] done. top candidates queued: {min(5, len(results))}")
+            print(f"[scout] upsert {r.niche_name}: data={result.data} count={result.count}")
+            inserted += 1
+        print(f"[scout] done. inserted={inserted} of top {min(5, len(results))}")
 
 
 def main():

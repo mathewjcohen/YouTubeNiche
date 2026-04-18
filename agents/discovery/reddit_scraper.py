@@ -1,7 +1,16 @@
 from dataclasses import dataclass
 from typing import List, Set
 import os
-import praw
+import re
+import time
+import html
+
+import feedparser
+import requests
+
+
+HEADERS = {"User-Agent": "YouTubeNiche-Bot/1.0"}
+_POST_ID_RE = re.compile(r"/comments/([a-z0-9]+)/")
 
 
 @dataclass
@@ -14,57 +23,58 @@ class RedditPost:
     subreddit: str
 
 
-def _build_reddit() -> praw.Reddit:
-    return praw.Reddit(
-        client_id=os.environ["REDDIT_CLIENT_ID"],
-        client_secret=os.environ["REDDIT_CLIENT_SECRET"],
-        user_agent="YouTubeNiche-Bot/1.0 by u/Dangerous_Type5562",
-        ratelimit_seconds=300,
-    )
+def _strip_html(text: str) -> str:
+    text = re.sub(r"<[^>]+>", " ", text)
+    return html.unescape(text).strip()
+
+
+def _post_id_from_url(url: str) -> str | None:
+    m = _POST_ID_RE.search(url)
+    return m.group(1) if m else None
 
 
 class RedditScraper:
-    def __init__(self, reddit: praw.Reddit | None = None):
-        self._reddit = reddit or _build_reddit()
-
     def fetch_top_posts(
         self,
         subreddit: str,
-        min_score: int = 500,
         min_body_length: int = 300,
         limit: int = 25,
         timeframe: str = "week",
     ) -> List[RedditPost]:
+        url = f"https://www.reddit.com/r/{subreddit}/top.rss"
+        resp = requests.get(url, params={"t": timeframe, "limit": limit}, headers=HEADERS, timeout=10)
+        resp.raise_for_status()
+
+        feed = feedparser.parse(resp.text)
         posts = []
-        for submission in self._reddit.subreddit(subreddit).top(time_filter=timeframe, limit=limit):
-            body = submission.selftext or ""
-            if submission.score < min_score:
+        for entry in feed.entries:
+            post_id = _post_id_from_url(entry.get("link", ""))
+            if not post_id:
                 continue
+            body = _strip_html(entry.get("summary", ""))
             if len(body) < min_body_length:
                 continue
-            posts.append(
-                RedditPost(
-                    post_id=submission.id,
-                    title=submission.title,
-                    body=body,
-                    score=submission.score,
-                    url=submission.url,
-                    subreddit=subreddit,
-                )
-            )
+            posts.append(RedditPost(
+                post_id=post_id,
+                title=entry.get("title", ""),
+                body=body,
+                score=0,
+                url=entry.get("link", ""),
+                subreddit=subreddit,
+            ))
         return posts
 
     def fetch_all_for_niche(
         self,
         subreddits: List[str],
-        min_score: int = 500,
         min_body_length: int = 300,
     ) -> List[RedditPost]:
         all_posts: List[RedditPost] = []
         for subreddit in subreddits:
             try:
-                posts = self.fetch_top_posts(subreddit, min_score, min_body_length)
+                posts = self.fetch_top_posts(subreddit, min_body_length)
                 all_posts.extend(posts)
+                time.sleep(1)
             except Exception as e:
                 print(f"[reddit] failed for r/{subreddit}: {e}")
         return all_posts

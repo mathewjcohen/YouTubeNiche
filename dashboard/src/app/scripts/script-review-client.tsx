@@ -19,14 +19,14 @@ export function ScriptReviewClient({ script }: { script: Script & { niches: { na
   const reject = () => startTransition(() => rejectScript(script.id, reason || 'Rejected'))
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 space-y-4">
+    <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 space-y-4">
       <div className="flex items-center gap-2">
-        <span className="font-semibold text-sm">{script.niches?.name}</span>
-        <span className="text-xs text-gray-400">{new Date(script.created_at).toLocaleDateString()}</span>
+        <span className="font-semibold text-sm text-gray-100">{script.niches?.name}</span>
+        <span className="text-xs text-gray-500">{new Date(script.created_at).toLocaleDateString()}</span>
       </div>
 
       {script.youtube_title && (
-        <p className="text-sm font-medium text-blue-700">Title: {script.youtube_title}</p>
+        <p className="text-sm font-medium text-blue-400">Title: {script.youtube_title}</p>
       )}
 
       <div className="grid grid-cols-2 gap-4">
@@ -35,7 +35,7 @@ export function ScriptReviewClient({ script }: { script: Script & { niches: { na
           <textarea
             value={longForm}
             onChange={(e) => setLongForm(e.target.value)}
-            className="w-full h-64 border border-gray-200 rounded p-2 text-sm font-mono resize-y"
+            className="w-full h-64 border border-gray-600 bg-gray-700 text-gray-100 rounded p-2 text-sm font-mono resize-y"
           />
         </div>
         <div>
@@ -43,7 +43,7 @@ export function ScriptReviewClient({ script }: { script: Script & { niches: { na
           <textarea
             value={short}
             onChange={(e) => setShort(e.target.value)}
-            className="w-full h-64 border border-gray-200 rounded p-2 text-sm font-mono resize-y"
+            className="w-full h-64 border border-gray-600 bg-gray-700 text-gray-100 rounded p-2 text-sm font-mono resize-y"
           />
         </div>
       </div>
@@ -60,12 +60,12 @@ export function ScriptReviewClient({ script }: { script: Script & { niches: { na
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="Rejection reason"
-          className="border border-gray-200 rounded px-3 py-2 text-sm flex-1"
+          className="border border-gray-600 bg-gray-700 text-gray-100 placeholder:text-gray-500 rounded px-3 py-2 text-sm flex-1"
         />
         <button
           onClick={reject}
           disabled={pending}
-          className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300 disabled:opacity-50"
+          className="bg-gray-700 text-gray-300 px-4 py-2 rounded text-sm hover:bg-gray-600 disabled:opacity-50"
         >
           Reject
         </button>

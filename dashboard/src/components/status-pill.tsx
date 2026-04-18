@@ -1,10 +1,10 @@
 import type { NicheStatus } from '@/lib/types'
 
 const COLORS: Record<NicheStatus, string> = {
-  candidate: 'bg-gray-100 text-gray-700',
-  testing: 'bg-yellow-100 text-yellow-800',
-  promoted: 'bg-green-100 text-green-800',
-  archived: 'bg-red-100 text-red-700',
+  candidate: 'bg-gray-700 text-gray-300',
+  testing: 'bg-yellow-900/40 text-yellow-300',
+  promoted: 'bg-green-900/40 text-green-300',
+  archived: 'bg-red-900/40 text-red-300',
 }
 
 export function StatusPill({ status }: { status: NicheStatus }) {

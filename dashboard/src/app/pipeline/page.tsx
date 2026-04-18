@@ -25,34 +25,34 @@ function GateCell({ gate, label, counts }: { gate: number; label: string; counts
   const isEmpty = counts.total === 0
 
   const borderColor = hasAwaiting
-    ? 'border-orange-400'
+    ? 'border-orange-600/60'
     : hasApproved
-    ? 'border-green-300'
-    : 'border-gray-200'
+    ? 'border-green-700/60'
+    : 'border-gray-700'
 
   const bgColor = hasAwaiting
-    ? 'bg-orange-50'
+    ? 'bg-orange-900/20'
     : hasApproved
-    ? 'bg-green-50'
-    : 'bg-gray-50'
+    ? 'bg-green-900/20'
+    : 'bg-gray-800/50'
 
   return (
     <div className={`rounded p-3 text-center text-xs border ${borderColor} ${bgColor}`}>
-      <p className="font-semibold text-gray-700">Gate {gate}</p>
+      <p className="font-semibold text-gray-300">Gate {gate}</p>
       <p className="text-gray-500 mb-2">{label}</p>
 
       {isEmpty ? (
-        <p className="text-gray-400">—</p>
+        <p className="text-gray-600">—</p>
       ) : (
         <div className="space-y-1">
           {counts.awaiting > 0 && (
-            <p className="text-orange-600 font-bold">{counts.awaiting} review</p>
+            <p className="text-orange-400 font-bold">{counts.awaiting} review</p>
           )}
           {counts.approved > 0 && (
-            <p className="text-green-600 font-medium">{counts.approved} approved</p>
+            <p className="text-green-400 font-medium">{counts.approved} approved</p>
           )}
           {counts.pending > 0 && (
-            <p className="text-gray-400">{counts.pending} pending</p>
+            <p className="text-gray-500">{counts.pending} pending</p>
           )}
         </div>
       )}
@@ -105,11 +105,11 @@ export default async function PipelinePage() {
         {(niches as Niche[]).map((niche) => {
           const counts = countsForNiche(niche.id)
           return (
-            <div key={niche.id} className="bg-white border border-gray-200 rounded-lg p-5">
+            <div key={niche.id} className="bg-gray-800 border border-gray-700 rounded-lg p-5">
               <div className="flex items-center gap-3 mb-4">
                 <StatusPill status={niche.status} />
-                <span className="font-semibold">{niche.name}</span>
-                <span className="text-xs text-gray-400">{niche.category}</span>
+                <span className="font-semibold text-gray-100">{niche.name}</span>
+                <span className="text-xs text-gray-500">{niche.category}</span>
               </div>
               <div className="grid grid-cols-5 gap-2">
                 {([2, 3, 4, 5, 6] as const).map((gate) => (

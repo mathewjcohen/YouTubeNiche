@@ -21,7 +21,7 @@ export default async function MediaPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-2">Media Review</h1>
-      <p className="text-sm text-gray-400 mb-6">Gates 4/5/6 — {total} awaiting review</p>
+      <p className="text-sm text-gray-500 mb-6">Gates 4/5/6 — {total} awaiting review</p>
 
       {!total ? (
         <p className="text-gray-500">Queue is empty.</p>
@@ -44,25 +44,25 @@ function MediaCard({ video }: {
   )
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5">
+    <div className="bg-gray-800 border border-gray-700 rounded-lg p-5">
       <div className="flex gap-5">
-        <div className="w-40 h-24 bg-gray-100 rounded overflow-hidden shrink-0 flex items-center justify-center">
+        <div className="w-40 h-24 bg-gray-700 rounded overflow-hidden shrink-0 flex items-center justify-center">
           {video.thumbnail_path?.startsWith('http') ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={video.thumbnail_path} alt="thumbnail" className="object-cover w-full h-full" />
           ) : (
-            <span className="text-xs text-gray-400">No preview</span>
+            <span className="text-xs text-gray-500">No preview</span>
           )}
         </div>
 
         <div className="flex-1">
-          <p className="font-semibold">{video.scripts?.youtube_title ?? '—'}</p>
-          <p className="text-xs text-gray-400">{video.niches?.name}</p>
+          <p className="font-semibold text-gray-100">{video.scripts?.youtube_title ?? '—'}</p>
+          <p className="text-xs text-gray-500">{video.niches?.name}</p>
 
           <div className="flex gap-3 mt-3">
             {pendingGates.map((gate) => (
-              <div key={gate} className="border border-orange-300 rounded p-3 bg-orange-50">
-                <p className="text-xs font-semibold text-orange-700 mb-2">Gate {gate} — {GATE_LABELS[gate]}</p>
+              <div key={gate} className="border border-orange-700/50 rounded p-3 bg-orange-900/20">
+                <p className="text-xs font-semibold text-orange-400 mb-2">Gate {gate} — {GATE_LABELS[gate]}</p>
                 <div className="flex gap-2">
                   <form action={approveMedia.bind(null, video.id, gate)}>
                     <button className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700">
@@ -73,8 +73,8 @@ function MediaCard({ video }: {
                     'use server'
                     await rejectMedia(video.id, gate, fd.get('reason') as string || 'Rejected')
                   }}>
-                    <input name="reason" placeholder="Reason" className="border border-gray-200 rounded px-2 py-1 text-xs w-32" />
-                    <button className="bg-gray-200 text-gray-700 text-xs px-3 py-1.5 rounded hover:bg-gray-300 ml-1">
+                    <input name="reason" placeholder="Reason" className="border border-gray-600 bg-gray-700 text-gray-100 placeholder:text-gray-500 rounded px-2 py-1 text-xs w-32" />
+                    <button className="bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded hover:bg-gray-600 ml-1">
                       Reject
                     </button>
                   </form>

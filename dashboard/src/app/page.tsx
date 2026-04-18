@@ -44,9 +44,9 @@ export default async function HomePage() {
 
 function StatCard({ label, value, highlight }: { label: string; value: string | number; highlight?: boolean }) {
   return (
-    <div className={`rounded-lg border p-5 bg-white shadow-sm ${highlight ? 'border-orange-400' : 'border-gray-200'}`}>
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className={`text-3xl font-bold mt-1 ${highlight ? 'text-orange-500' : 'text-gray-900'}`}>{value}</p>
+    <div className={`rounded-lg border p-5 bg-gray-800 ${highlight ? 'border-orange-500' : 'border-gray-700'}`}>
+      <p className="text-sm text-gray-400">{label}</p>
+      <p className={`text-3xl font-bold mt-1 ${highlight ? 'text-orange-400' : 'text-gray-100'}`}>{value}</p>
     </div>
   )
 }

@@ -39,19 +39,19 @@ export default async function AnalyticsPage() {
         {(niches as Niche[]).map((niche) => {
           const latest = latestByNiche[niche.id]
           return (
-            <div key={niche.id} className="bg-white border border-gray-200 rounded-lg p-5">
+            <div key={niche.id} className="bg-gray-800 border border-gray-700 rounded-lg p-5">
               <div className="flex items-center gap-3 mb-4">
                 <StatusPill status={niche.status} />
-                <span className="font-semibold">{niche.name}</span>
-                <span className="text-xs text-gray-400">{niche.category}</span>
+                <span className="font-semibold text-gray-100">{niche.name}</span>
+                <span className="text-xs text-gray-500">{niche.category}</span>
                 {latest?.early_promotion_flagged && (
-                  <span className="ml-auto bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded-full font-medium">
+                  <span className="ml-auto bg-yellow-900/40 text-yellow-300 text-xs px-2 py-0.5 rounded-full font-medium">
                     Early Promotion Flagged
                   </span>
                 )}
               </div>
               {!latest ? (
-                <p className="text-sm text-gray-400">No analytics yet.</p>
+                <p className="text-sm text-gray-500">No analytics yet.</p>
               ) : (
                 <div className="grid grid-cols-4 gap-4">
                   <Metric label="Views (total)" value={latest.views_total.toLocaleString()} />
@@ -72,7 +72,7 @@ export default async function AnalyticsPage() {
           )
         })}
       </div>
-      <p className="text-xs text-gray-400 mt-4">
+      <p className="text-xs text-gray-600 mt-4">
         Promotion threshold: CTR ≥ 3% AND avg watch time ≥ 35% AND 50+ views (60-day review)
       </p>
     </div>
@@ -83,7 +83,7 @@ function Metric({ label, value, highlight }: { label: string; value: string; hig
   return (
     <div className="text-center">
       <p className="text-xs text-gray-500">{label}</p>
-      <p className={`text-xl font-bold mt-1 ${highlight ? 'text-green-600' : 'text-gray-800'}`}>{value}</p>
+      <p className={`text-xl font-bold mt-1 ${highlight ? 'text-green-400' : 'text-gray-100'}`}>{value}</p>
     </div>
   )
 }

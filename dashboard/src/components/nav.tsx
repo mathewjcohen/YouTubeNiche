@@ -1,6 +1,5 @@
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { GateBadge } from './gate-badge'
+import { NavLinks } from './nav-links'
 import type { PendingCounts } from '@/lib/types'
 
 async function getPendingCounts(): Promise<PendingCounts> {
@@ -32,17 +31,6 @@ async function getPendingCounts(): Promise<PendingCounts> {
   }
 }
 
-const NAV_LINKS = [
-  { href: '/', label: 'Home' },
-  { href: '/niches', label: 'Niches', gateKey: 'gate1' as keyof PendingCounts },
-  { href: '/pipeline', label: 'Pipeline' },
-  { href: '/topics', label: 'Topic Queue', gateKey: 'gate2' as keyof PendingCounts },
-  { href: '/scripts', label: 'Script Review', gateKey: 'gate3' as keyof PendingCounts },
-  { href: '/media', label: 'Media Review', gateKey: null },
-  { href: '/analytics', label: 'Analytics' },
-  { href: '/settings', label: 'Settings' },
-]
-
 export async function Nav() {
   const counts = await getPendingCounts()
   const mediaTotal = counts.gate4 + counts.gate5 + counts.gate6
@@ -52,27 +40,7 @@ export async function Nav() {
       <div className="px-4 py-5 text-white font-bold text-lg border-b border-gray-700">
         YouTubeNiche
       </div>
-      <ul className="flex flex-col gap-1 p-2 flex-1">
-        {NAV_LINKS.map(({ href, label, gateKey }) => {
-          const count =
-            gateKey === null
-              ? mediaTotal
-              : gateKey
-              ? counts[gateKey]
-              : 0
-          return (
-            <li key={href}>
-              <Link
-                href={href}
-                className="flex items-center px-3 py-2 rounded hover:bg-gray-700 text-sm"
-              >
-                {label}
-                {count > 0 && <GateBadge count={count} />}
-              </Link>
-            </li>
-          )
-        })}
-      </ul>
+      <NavLinks counts={counts} mediaTotal={mediaTotal} />
     </nav>
   )
 }

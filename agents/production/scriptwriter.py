@@ -90,7 +90,7 @@ class Scriptwriter:
         lines = [l.strip() for l in meta_raw.strip().split("\n") if l.strip()]
         title = lines[0] if len(lines) > 0 else topic_title[:70]
         description = lines[1] if len(lines) > 1 else ""
-        tags = [t.strip() for t in lines[2].split(",")] if len(lines) > 2 else []
+        tags = [t.strip() for t in lines[2].split(",") if t.strip()] if len(lines) > 2 else []
 
         return ScriptPair(
             long_form=long_form,

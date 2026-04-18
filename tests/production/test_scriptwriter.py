@@ -12,19 +12,19 @@ def writer():
 
 
 def test_generate_returns_script_pair(writer):
-    with patch("agents.production.scriptwriter.complete_sonnet") as mock_s, \
-         patch("agents.production.scriptwriter.complete") as mock_h:
-        mock_s.return_value = "LONG FORM SCRIPT CONTENT [B-ROLL: person checks phone]"
-        mock_h.return_value = "SHORT SCRIPT CONTENT"
-        patch2 = patch("agents.production.scriptwriter.complete_sonnet",
-                       side_effect=["LONG FORM SCRIPT CONTENT", "Title|Description|tag1,tag2"])
-        with patch2:
-            result = writer.generate(
-                topic_title="I sued my landlord and won",
-                topic_body="Full story about the eviction dispute...",
-                niche_name="legal rights",
-                niche_category="legal",
-            )
+    with patch("agents.production.scriptwriter.complete_sonnet") as mock_sonnet, \
+         patch("agents.production.scriptwriter.complete") as mock_haiku:
+        mock_sonnet.side_effect = [
+            "LONG FORM SCRIPT CONTENT [B-ROLL: person checks phone]",
+            "My Title\nMy Description here.\ntag1,tag2,tag3",
+        ]
+        mock_haiku.return_value = "SHORT SCRIPT CONTENT"
+        result = writer.generate(
+            topic_title="I sued my landlord and won",
+            topic_body="Full story about the eviction dispute...",
+            niche_name="legal rights",
+            niche_category="legal",
+        )
     assert isinstance(result, ScriptPair)
     assert len(result.long_form) > 0
     assert len(result.short_form) > 0

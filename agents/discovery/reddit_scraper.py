@@ -101,7 +101,9 @@ def main():
     for niche in active_niches:
         subs = niche.get("subreddits") or subreddits_map.get(niche["category"], [])
         posts = scraper.fetch_all_for_niche(subs)
+        print(f"[reddit] {niche['name']}: {len(posts)} posts before dedup")
         posts = scraper.deduplicate(posts, known_ids)
+        print(f"[reddit] {niche['name']}: {len(posts)} posts after dedup, processing up to 10")
         for post in posts[:10]:
             score_prompt = f"Rate this Reddit post for YouTube video potential (1-10). Title: {post.title}\nBody excerpt: {post.body[:300]}\nReturn only the integer score."
             try:

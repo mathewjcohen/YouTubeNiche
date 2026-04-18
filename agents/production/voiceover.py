@@ -1,0 +1,133 @@
+import asyncio
+from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Tuple
+import edge_tts
+from supabase import Client
+from agents.shared.gate_client import GateClient, GateNumber
+
+VOICE = "en-US-AriaNeural"
+
+
+@dataclass
+class WordTimestamp:
+    word: str
+    offset_ms: int
+    duration_ms: int
+
+
+def ms_to_srt_time(ms: int) -> str:
+    hours = ms // 3_600_000
+    ms %= 3_600_000
+    minutes = ms // 60_000
+    ms %= 60_000
+    seconds = ms // 1_000
+    millis = ms % 1_000
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
+
+
+def build_srt(words: List[WordTimestamp], max_chars_per_cue: int = 80) -> str:
+    if not words:
+        return ""
+    cues: List[Tuple[int, int, str]] = []
+    current_words: List[WordTimestamp] = []
+    current_chars = 0
+
+    def flush():
+        if not current_words:
+            return
+        start = current_words[0].offset_ms
+        last = current_words[-1]
+        end = last.offset_ms + last.duration_ms
+        text = " ".join(w.word for w in current_words)
+        cues.append((start, end, text))
+
+    for w in words:
+        if current_chars + len(w.word) + 1 > max_chars_per_cue and current_words:
+            flush()
+            current_words = []
+            current_chars = 0
+        current_words.append(w)
+        current_chars += len(w.word) + 1
+
+    flush()
+
+    lines = []
+    for i, (start, end, text) in enumerate(cues, 1):
+        lines.append(str(i))
+        lines.append(f"{ms_to_srt_time(start)} --> {ms_to_srt_time(end)}")
+        lines.append(text)
+        lines.append("")
+    return "\n".join(lines)
+
+
+class VoiceoverAgent:
+    def __init__(self, supabase: Client, gate_client: GateClient, output_dir: str = "output/audio"):
+        self._sb = supabase
+        self._gate = gate_client
+        self._output_dir = Path(output_dir)
+        self._output_dir.mkdir(parents=True, exist_ok=True)
+
+    async def synthesize(self, text: str, output_stem: str) -> Tuple[Path, Path]:
+        audio_path = self._output_dir / f"{output_stem}.mp3"
+        srt_path = self._output_dir / f"{output_stem}.srt"
+
+        communicate = edge_tts.Communicate(text=text, voice=VOICE)
+        words: List[WordTimestamp] = []
+
+        with audio_path.open("wb") as audio_file:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_file.write(chunk["data"])
+                elif chunk["type"] == "WordBoundary":
+                    words.append(
+                        WordTimestamp(
+                            word=chunk["text"],
+                            offset_ms=chunk["offset"] // 10_000,
+                            duration_ms=chunk["duration"] // 10_000,
+                        )
+                    )
+
+        srt_content = build_srt(words)
+        srt_path.write_text(srt_content, encoding="utf-8")
+        return audio_path, srt_path
+
+    def process_approved_scripts(self, niche_id: str) -> None:
+        scripts = (
+            self._sb.table("scripts")
+            .select("*")
+            .eq("niche_id", niche_id)
+            .eq("gate3_state", "approved")
+            .execute()
+            .data
+        )
+        for script in scripts:
+            for video_type, text in [("long", script["long_form_text"]), ("short", script["short_text"])]:
+                stem = f"{script['id'][:8]}_{video_type}"
+                audio_path, srt_path = asyncio.run(self.synthesize(text, stem))
+
+                result = (
+                    self._sb.table("videos")
+                    .insert(
+                        {
+                            "script_id": script["id"],
+                            "niche_id": niche_id,
+                            "video_type": video_type,
+                            "audio_path": str(audio_path),
+                            "srt_path": str(srt_path),
+                            "status": "pending",
+                            "gate4_state": "pending",
+                        }
+                    )
+                    .execute()
+                )
+                video_id = result.data[0]["id"]
+                self._gate.advance_or_pause(
+                    gate=GateNumber.VOICEOVER,
+                    niche_id=niche_id,
+                    table="videos",
+                    item_id=video_id,
+                    gate_column="gate4_state",
+                    auto_state="approved",
+                    review_state="awaiting_review",
+                )

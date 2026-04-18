@@ -1,7 +1,7 @@
 from supabase import Client, create_client
 from agents.shared.gate_client import GateClient
 from agents.shared.config_loader import get_env
-from agents.shared.db_retry import execute_with_retry, patch_postgrest_http1
+from agents.shared.db_retry import execute_with_retry
 
 
 class PipelineRunner:
@@ -72,7 +72,7 @@ class PipelineRunner:
 
 
 def main() -> None:
-    sb = patch_postgrest_http1(create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY")))
+    sb = create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY"))
     gate = GateClient(sb)
     runner = PipelineRunner(supabase=sb, gate_client=gate)
     runner.run()

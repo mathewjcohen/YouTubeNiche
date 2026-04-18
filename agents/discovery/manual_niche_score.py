@@ -9,7 +9,7 @@ from agents.discovery.niche_scorer import NicheScorer
 from agents.discovery.youtube_client import YouTubeClient
 from agents.discovery.reddit_scraper import RedditScraper
 from agents.shared.config_loader import get_env, get_subreddits
-from agents.shared.db_retry import execute_with_retry, patch_postgrest_http1
+from agents.shared.db_retry import execute_with_retry
 
 
 def main():
@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--category", required=True, help="Category key from rpm table")
     args = parser.parse_args()
 
-    sb = patch_postgrest_http1(create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY")))
+    sb = create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY"))
     yt = YouTubeClient(rapidapi_key=os.getenv("RAPIDAPI_KEY", ""))
     reddit = RedditScraper()
     scorer = NicheScorer(youtube_client=yt, reddit_scraper=reddit)

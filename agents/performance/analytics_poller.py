@@ -6,7 +6,7 @@ from googleapiclient.discovery import build
 from supabase import Client, create_client
 
 from agents.shared.config_loader import get_env
-from agents.shared.db_retry import execute_with_retry, patch_postgrest_http1
+from agents.shared.db_retry import execute_with_retry
 from agents.production.uploader import build_youtube_service
 
 # Promotion thresholds (at 60-day review)
@@ -128,7 +128,7 @@ class AnalyticsPoller:
 
 
 def main():
-    sb = patch_postgrest_http1(create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY")))
+    sb = create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY"))
     poller = AnalyticsPoller(supabase=sb)
     poller.run()
 

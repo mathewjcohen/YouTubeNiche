@@ -30,7 +30,7 @@ class GateClient:
             self._sb.table("gate_config")
             .select("enabled")
             .eq("gate_number", int(gate))
-            .order("niche_id", desc=True, nullsfirst=False)
+            .is_("niche_id", "null")
             .limit(1)
             .execute()
         )

@@ -50,3 +50,15 @@ def test_score_handles_no_youtube_results(scorer):
         result = scorer.score("obscure niche xyz", category="career", subreddits=["careeradvice"])
     # Should not raise; score should be low but defined
     assert result.final_score >= 0
+
+
+def test_score_returns_one_when_trend_mean_is_zero(scorer):
+    with patch("agents.discovery.niche_scorer.TrendReq") as mock_trends:
+        import pandas as pd
+        mock_df = MagicMock()
+        mock_df.empty = False
+        mock_df.__getitem__ = lambda self, key: pd.Series([0, 0, 0, 0])
+        mock_trends.return_value.interest_over_time.return_value = mock_df
+        result = scorer.score("zeroed niche", category="career", subreddits=["careeradvice"])
+    # When overall trend mean is 0, trend_score should be 1.0 (neutral fallback)
+    assert result.trend_score == 1.0

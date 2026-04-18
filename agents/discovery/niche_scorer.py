@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import Any, List
 from pytrends.request import TrendReq
 from agents.discovery.youtube_client import YouTubeClient
 from agents.discovery.reddit_scraper import RedditScraper
@@ -92,7 +92,7 @@ class NicheScorer:
         # Normalize: cap at 10K, scale to 1–10
         return round(min(avg / 1000, 10.0), 2)
 
-    def _compute_competition(self, videos: list) -> float:
+    def _compute_competition(self, videos: List[Any]) -> float:
         if not videos:
             return 1.0
         avg_views = sum(v.view_count for v in videos) / len(videos)

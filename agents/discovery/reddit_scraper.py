@@ -1,10 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Set
-import requests
-import time
-
-
-HEADERS = {"User-Agent": "YouTubeNiche-Bot/1.0"}
+import os
+import praw
 
 
 @dataclass
@@ -17,7 +14,19 @@ class RedditPost:
     subreddit: str
 
 
+def _build_reddit() -> praw.Reddit:
+    return praw.Reddit(
+        client_id=os.environ["REDDIT_CLIENT_ID"],
+        client_secret=os.environ["REDDIT_CLIENT_SECRET"],
+        user_agent="YouTubeNiche-Bot/1.0 by u/Dangerous_Type5562",
+        ratelimit_seconds=300,
+    )
+
+
 class RedditScraper:
+    def __init__(self, reddit: praw.Reddit | None = None):
+        self._reddit = reddit or _build_reddit()
+
     def fetch_top_posts(
         self,
         subreddit: str,
@@ -26,32 +35,20 @@ class RedditScraper:
         limit: int = 25,
         timeframe: str = "week",
     ) -> List[RedditPost]:
-        url = f"https://www.reddit.com/r/{subreddit}/top.json"
-        resp = requests.get(
-            url,
-            params={"t": timeframe, "limit": limit},
-            headers=HEADERS,
-            timeout=10,
-        )
-        resp.raise_for_status()
-        children = resp.json()["data"]["children"]
-
         posts = []
-        for child in children:
-            d = child["data"]
-            body = d.get("selftext", "")
-            score = d.get("score", 0)
-            if score < min_score:
+        for submission in self._reddit.subreddit(subreddit).top(time_filter=timeframe, limit=limit):
+            body = submission.selftext or ""
+            if submission.score < min_score:
                 continue
             if len(body) < min_body_length:
                 continue
             posts.append(
                 RedditPost(
-                    post_id=d["id"],
-                    title=d["title"],
+                    post_id=submission.id,
+                    title=submission.title,
                     body=body,
-                    score=score,
-                    url=d.get("url", ""),
+                    score=submission.score,
+                    url=submission.url,
                     subreddit=subreddit,
                 )
             )
@@ -68,7 +65,6 @@ class RedditScraper:
             try:
                 posts = self.fetch_top_posts(subreddit, min_score, min_body_length)
                 all_posts.extend(posts)
-                time.sleep(1)
             except Exception as e:
                 print(f"[reddit] failed for r/{subreddit}: {e}")
         return all_posts

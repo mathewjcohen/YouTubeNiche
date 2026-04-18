@@ -4,24 +4,27 @@ import httpx
 def patch_postgrest_http1(sb):
     """Replace PostgREST session with HTTP/1.1-only to avoid StreamReset on GitHub Actions.
 
-    Builds a fresh httpx.Client from sb.supabase_url/supabase_key rather than copying
-    headers from the old session (copying causes Illegal header value errors in httpcore).
+    Auth headers are passed via the postgrest headers= parameter so they flow through
+    SyncPostgrestClient.headers (per-request headers) rather than only living on the
+    httpx.Client base headers. This prevents Illegal header value errors from httpcore
+    when the two header stores are merged during request building.
     """
     from postgrest import SyncPostgrestClient
 
     rest_url = f"{str(sb.supabase_url).rstrip('/')}/rest/v1"
-    session = httpx.Client(
+    key = str(sb.supabase_key)
+    pg = SyncPostgrestClient(
+        rest_url,
+        headers={"apikey": key, "Authorization": f"Bearer {key}"},
+    )
+    pg.session.close()
+    pg.session = httpx.Client(
         base_url=rest_url,
-        headers={
-            "apikey": sb.supabase_key,
-            "Authorization": f"Bearer {sb.supabase_key}",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        },
+        headers={k: str(v) for k, v in pg.headers.items()},
         http2=False,
         follow_redirects=True,
     )
-    sb._postgrest = SyncPostgrestClient(rest_url, http_client=session)
+    sb._postgrest = pg
     return sb
 
 

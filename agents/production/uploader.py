@@ -1,4 +1,3 @@
-import json
 import os
 from pathlib import Path
 from typing import List
@@ -10,8 +9,7 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from supabase import Client
 
-from agents.shared.config_loader import get_env
-from agents.shared.gate_client import GateClient, GateNumber
+from agents.shared.gate_client import GateClient
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 

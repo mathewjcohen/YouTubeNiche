@@ -1,9 +1,7 @@
 import re
-import os
 import tempfile
 import urllib.request
 from pathlib import Path
-from dataclasses import dataclass
 from typing import List, Tuple, Optional
 
 import requests
@@ -12,7 +10,7 @@ from moviepy.editor import (
     CompositeVideoClip, ColorClip
 )
 from supabase import Client
-from agents.shared.gate_client import GateClient, GateNumber
+from agents.shared.gate_client import GateClient
 
 
 BROLL_PATTERN = re.compile(r"\[B-ROLL:\s*(.+?)\]", re.IGNORECASE)
@@ -103,7 +101,7 @@ class VideoAssembler:
                     clip = raw.subclip(0, clip_duration).resize((self.TARGET_WIDTH, self.TARGET_HEIGHT))
                 clips.append(clip)
 
-            video = concatenate_videoclips(clips, method="compose")
+            video = concatenate_videoclips(clips, method="chain")
             video = video.set_audio(audio)
             video = video.subclip(0, min(total_duration, video.duration))
 

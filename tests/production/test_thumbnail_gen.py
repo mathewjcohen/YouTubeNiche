@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from agents.production.thumbnail_gen import ThumbnailGenerator, ThumbnailTemplate
+from agents.production.thumbnail_gen import ThumbnailGenerator
 
 
 def test_template_render_creates_file(tmp_path):

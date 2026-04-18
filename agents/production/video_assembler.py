@@ -4,6 +4,10 @@ import urllib.request
 from pathlib import Path
 from typing import List, Tuple, Optional
 
+import PIL.Image
+if not hasattr(PIL.Image, "ANTIALIAS"):
+    PIL.Image.ANTIALIAS = PIL.Image.LANCZOS  # removed in Pillow 10, moviepy 1.x needs it
+
 import requests
 from moviepy.editor import (
     VideoFileClip, AudioFileClip, concatenate_videoclips,

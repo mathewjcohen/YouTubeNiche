@@ -9,7 +9,7 @@ def patch_postgrest_http1(sb):
     """
     from postgrest import SyncPostgrestClient
 
-    rest_url = f"{sb.supabase_url.rstrip('/')}/rest/v1"
+    rest_url = f"{str(sb.supabase_url).rstrip('/')}/rest/v1"
     session = httpx.Client(
         base_url=rest_url,
         headers={

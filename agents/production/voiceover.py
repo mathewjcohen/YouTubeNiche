@@ -27,6 +27,25 @@ CATEGORY_VOICE: dict[str, str] = {
 }
 DEFAULT_VOICE = "onyx"
 
+# Background music beds — drop MP3s into assets/music/ and they'll be mixed in automatically.
+# Three files cover all categories; pipeline skips mixing if a file is absent.
+# serious.mp3 → calm/authoritative (legal, tax, finance)
+# warm.mp3    → positive/approachable (health, insurance, real estate)
+# upbeat.mp3  → forward-looking/energetic (career, ai_tech)
+MUSIC_DIR = Path(__file__).resolve().parent.parent.parent / "assets" / "music"
+CATEGORY_MUSIC: dict[str, str] = {
+    "legal":            "serious.mp3",
+    "tax":              "serious.mp3",
+    "personal_finance": "serious.mp3",
+    "health":           "warm.mp3",
+    "insurance":        "warm.mp3",
+    "real_estate":      "warm.mp3",
+    "career":           "upbeat.mp3",
+    "ai_tech":          "upbeat.mp3",
+}
+DEFAULT_MUSIC = "serious.mp3"
+MUSIC_BED_DBFS = -28  # target level for music under voice
+
 
 def _chunk_text(text: str, max_chars: int = 4000) -> list:
     """Split text into chunks ≤max_chars at sentence boundaries."""
@@ -79,6 +98,27 @@ def _clean_for_tts(text: str) -> str:
     # Collapse excess blank lines
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
+
+
+def _mix_music(audio_path: Path, music_path: Path) -> None:
+    """Mix background music bed into voiceover audio in-place."""
+    from pydub import AudioSegment
+    try:
+        import imageio_ffmpeg
+        AudioSegment.converter = imageio_ffmpeg.get_ffmpeg_exe()
+    except ImportError:
+        pass
+    voice = AudioSegment.from_mp3(str(audio_path))
+    music = AudioSegment.from_mp3(str(music_path))
+    if len(music) < len(voice):
+        loops = (len(voice) // len(music)) + 2
+        music = music * loops
+    music = music[:len(voice)]
+    music = music.apply_gain(MUSIC_BED_DBFS - music.dBFS)
+    music = music.fade_in(1000).fade_out(3000)
+    mixed = voice.overlay(music)
+    mixed.export(str(audio_path), format="mp3", bitrate="192k")
+    print(f"[voiceover] music bed mixed in ({music_path.name})")
 
 
 @dataclass
@@ -198,6 +238,12 @@ class VoiceoverAgent:
                 words = self._synthesize_openai(text, audio_path, voice)
                 srt_content = build_srt(words)
                 srt_path.write_text(srt_content, encoding="utf-8")
+                music_path_candidate = MUSIC_DIR / CATEGORY_MUSIC.get(category.lower(), DEFAULT_MUSIC)
+                if music_path_candidate.exists():
+                    try:
+                        _mix_music(audio_path, music_path_candidate)
+                    except Exception as exc:
+                        print(f"[voiceover] music mix failed, using dry audio: {exc}")
                 return audio_path, srt_path
             except Exception as exc:
                 last_exc = exc

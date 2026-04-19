@@ -11,10 +11,22 @@ from agents.shared.db_retry import execute_with_retry
 from agents.shared.config_loader import get_env
 
 # OpenAI TTS — used when OPENAI_API_KEY is set
-# Model: tts-1 (fast) or tts-1-hd (higher quality, ~2× cost)
-# Voice: onyx (deep/authoritative male), nova (warm female), alloy, echo, fable, shimmer
 OPENAI_TTS_MODEL = "tts-1-hd"
-OPENAI_TTS_VOICE = "onyx"
+
+# Per-category voice selection
+# onyx  — deep, relaxed, authoritative (law, finance, tax)
+# nova   — warm, friendly, approachable (health, insurance, career)
+CATEGORY_VOICE: dict[str, str] = {
+    "legal":            "onyx",
+    "insurance":        "nova",
+    "tax":              "onyx",
+    "personal_finance": "onyx",
+    "real_estate":      "nova",
+    "career":           "nova",
+    "ai_tech":          "onyx",
+    "health":           "nova",
+}
+DEFAULT_VOICE = "onyx"
 
 # Fallback when no OpenAI key
 EDGE_TTS_VOICE = "en-US-AndrewNeural"
@@ -138,13 +150,13 @@ class VoiceoverAgent:
         _key = get_env("OPENAI_API_KEY", required=False)
         self._openai_key: Optional[str] = _key or None
 
-    def _synthesize_openai(self, text: str, audio_path: Path) -> List[WordTimestamp]:
+    def _synthesize_openai(self, text: str, audio_path: Path, voice: str) -> List[WordTimestamp]:
         from openai import OpenAI
         client = OpenAI(api_key=self._openai_key)
-        print(f"[voiceover] using OpenAI TTS ({OPENAI_TTS_MODEL}/{OPENAI_TTS_VOICE})")
+        print(f"[voiceover] using OpenAI TTS ({OPENAI_TTS_MODEL}/{voice})")
         response = client.audio.speech.create(
             model=OPENAI_TTS_MODEL,
-            voice=OPENAI_TTS_VOICE,
+            voice=voice,
             input=text,
             response_format="mp3",
         )
@@ -167,16 +179,17 @@ class VoiceoverAgent:
                     ))
         return words
 
-    async def synthesize(self, text: str, output_stem: str, max_attempts: int = 3) -> Tuple[Path, Path]:
+    async def synthesize(self, text: str, output_stem: str, category: str = "", max_attempts: int = 3) -> Tuple[Path, Path]:
         text = _clean_for_tts(text)
         audio_path = self._output_dir / f"{output_stem}.mp3"
         srt_path = self._output_dir / f"{output_stem}.srt"
+        voice = CATEGORY_VOICE.get(category.lower(), DEFAULT_VOICE)
 
         last_exc: Exception = RuntimeError("no attempts made")
         for attempt in range(1, max_attempts + 1):
             try:
                 if self._openai_key:
-                    words = self._synthesize_openai(text, audio_path)
+                    words = self._synthesize_openai(text, audio_path, voice)
                 else:
                     words = await self._synthesize_edge(text, audio_path)
                 srt_content = build_srt(words)
@@ -198,6 +211,10 @@ class VoiceoverAgent:
         return self._sb.storage.from_("voiceovers").get_public_url(storage_key)
 
     def process_approved_scripts(self, niche_id: str) -> None:
+        niche_rows = execute_with_retry(
+            self._sb.table("niches").select("category").eq("id", niche_id).limit(1)
+        ).data
+        category = niche_rows[0]["category"] if niche_rows else ""
         scripts = execute_with_retry(
             self._sb.table("scripts")
             .select("*")
@@ -209,7 +226,7 @@ class VoiceoverAgent:
             for video_type, text in [("long", script["long_form_text"]), ("short", script["short_text"])]:
                 stem = f"{script['id'][:8]}_{video_type}"
                 try:
-                    audio_path, srt_path = asyncio.run(self.synthesize(text, stem))
+                    audio_path, srt_path = asyncio.run(self.synthesize(text, stem, category=category))
                 except Exception as exc:
                     print(f"[voiceover] synthesis failed for {stem} after retries: {exc}; skipping")
                     continue

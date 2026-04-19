@@ -100,8 +100,11 @@ _DEFAULT_DISCLAIMER = (
 )
 
 
+_AI_VOICE_DISCLOSURE = "\n\n🤖 Voiceover is AI-generated."
+
+
 def get_disclaimer(category: str) -> str:
-    return DISCLAIMERS.get(category.lower(), _DEFAULT_DISCLAIMER)
+    return DISCLAIMERS.get(category.lower(), _DEFAULT_DISCLAIMER) + _AI_VOICE_DISCLOSURE
 
 
 @dataclass

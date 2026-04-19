@@ -73,7 +73,10 @@ class PipelineRunner:
             ).data
             print(f"[pipeline]   missing_thumbs={len(missing_thumbs)}")
             if approved_scripts or missing_thumbs:
-                self._run_thumbnail_gen(niche)
+                try:
+                    self._run_thumbnail_gen(niche)
+                except Exception as exc:
+                    print(f"[pipeline]   thumbnail_gen failed for '{name}': {exc}")
             else:
                 print(f"[pipeline]   skipping thumbnail_gen — no approved scripts and no missing thumbs")
 

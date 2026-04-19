@@ -196,6 +196,7 @@ class ThumbnailGenerator:
             .execute()
             .data
         )
+        print(f"[thumbnail] {len(scripts)} approved script(s) found for niche {niche_id}")
         for script in scripts:
             category = script["niches"]["category"]
             # Fetch Pexels photo once per script; reuse for both long and short
@@ -222,25 +223,34 @@ class ThumbnailGenerator:
                 except Exception as exc:
                     print(f"[thumbnail] render failed for {stem}: {exc}")
                     continue
-                videos = (
-                    self._sb.table("videos")
-                    .select("id")
-                    .eq("script_id", script["id"])
-                    .eq("video_type", video_type)
-                    .execute()
-                    .data
-                )
-                thumb_url = self._upload(out)
-                for video in videos:
-                    self._sb.table("videos").update(
-                        {"thumbnail_path": thumb_url}
-                    ).eq("id", video["id"]).execute()
-                    self._gate.advance_or_pause(
-                        gate=GateNumber.THUMBNAIL,
-                        niche_id=niche_id,
-                        table="videos",
-                        item_id=video["id"],
-                        gate_column="gate5_state",
-                        auto_state="approved",
-                        review_state="awaiting_review",
+                try:
+                    videos = (
+                        self._sb.table("videos")
+                        .select("id")
+                        .eq("script_id", script["id"])
+                        .eq("video_type", video_type)
+                        .execute()
+                        .data
                     )
+                    print(f"[thumbnail] found {len(videos)} video row(s) for {stem}")
+                    if not videos:
+                        print(f"[thumbnail] no video rows found for script {script['id']} ({video_type}) — skipping upload")
+                        continue
+                    thumb_url = self._upload(out)
+                    print(f"[thumbnail] uploaded → {thumb_url}")
+                    for video in videos:
+                        self._sb.table("videos").update(
+                            {"thumbnail_path": thumb_url}
+                        ).eq("id", video["id"]).execute()
+                        self._gate.advance_or_pause(
+                            gate=GateNumber.THUMBNAIL,
+                            niche_id=niche_id,
+                            table="videos",
+                            item_id=video["id"],
+                            gate_column="gate5_state",
+                            auto_state="approved",
+                            review_state="awaiting_review",
+                        )
+                    print(f"[thumbnail] updated {len(videos)} video row(s) for {stem}")
+                except Exception as exc:
+                    print(f"[thumbnail] upload/db update failed for {stem}: {exc}")

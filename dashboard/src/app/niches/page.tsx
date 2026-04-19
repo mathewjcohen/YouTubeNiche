@@ -7,6 +7,9 @@ import type { Niche, NicheStatus } from '@/lib/types'
 const CATEGORIES = [
   'Legal / rights', 'Insurance', 'Tax / accounting', 'Personal finance',
   'Real estate', 'Career / salary', 'AI / tech tools', 'Health / medical',
+  'Home improvement', 'Parenting', 'Personal development', 'Relationships',
+  'Travel', 'Food & cooking', 'Fitness', 'Beauty & skincare',
+  'Small business', 'Side hustles', 'Crypto / Web3', 'Sustainability',
 ]
 
 const STATUS_ORDER: NicheStatus[] = ['candidate', 'testing', 'promoted', 'archived']
@@ -44,9 +47,16 @@ export default async function NichesPage() {
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-gray-500">Category</label>
-            <select name="category" className="border border-gray-600 bg-gray-700 text-gray-100 rounded px-3 py-2 text-sm">
-              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-            </select>
+            <input
+              name="category"
+              list="category-suggestions"
+              required
+              placeholder="e.g. Legal / rights"
+              className="border border-gray-600 bg-gray-700 text-gray-100 placeholder:text-gray-500 rounded px-3 py-2 text-sm w-52"
+            />
+            <datalist id="category-suggestions">
+              {CATEGORIES.map((c) => <option key={c} value={c} />)}
+            </datalist>
           </div>
           <button
             type="submit"

@@ -44,7 +44,7 @@ CATEGORY_MUSIC: dict[str, str] = {
     "ai_tech":          "upbeat.mp3",
 }
 DEFAULT_MUSIC = "serious.mp3"
-MUSIC_BED_DBFS = -28  # target level for music under voice
+MUSIC_BED_DB_BELOW_VOICE = 12  # music sits this many dB below voice RMS (~25% perceived)
 
 
 def _chunk_text(text: str, max_chars: int = 4000) -> list:
@@ -114,7 +114,8 @@ def _mix_music(audio_path: Path, music_path: Path) -> None:
         loops = (len(voice) // len(music)) + 2
         music = music * loops
     music = music[:len(voice)]
-    music = music.apply_gain(MUSIC_BED_DBFS - music.dBFS)
+    target_dbfs = voice.dBFS - MUSIC_BED_DB_BELOW_VOICE
+    music = music.apply_gain(target_dbfs - music.dBFS)
     music = music.fade_in(1000).fade_out(3000)
     mixed = voice.overlay(music)
     mixed.export(str(audio_path), format="mp3", bitrate="192k")

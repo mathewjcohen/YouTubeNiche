@@ -1,7 +1,9 @@
 import os
+import tempfile
 from pathlib import Path
 from typing import List
 
+import requests as http_requests
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
@@ -47,6 +49,14 @@ class YouTubeUploader:
         self._gate = gate_client
         self._yt = build_youtube_service()
 
+    def _fetch_to_tempfile(self, url: str, suffix: str) -> Path:
+        resp = http_requests.get(url, timeout=300)
+        resp.raise_for_status()
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        tmp.write(resp.content)
+        tmp.close()
+        return Path(tmp.name)
+
     def upload(
         self,
         video_path: str,
@@ -56,9 +66,8 @@ class YouTubeUploader:
         tags: List[str],
         is_short: bool = False,
     ) -> str:
-        vp = Path(video_path)
-        if not vp.exists():
-            raise FileNotFoundError(f"Video file not found: {video_path}")
+        local_video = self._fetch_to_tempfile(video_path, ".mp4")
+        local_thumb = self._fetch_to_tempfile(thumbnail_path, ".jpg") if thumbnail_path else None
 
         body = {
             "snippet": {
@@ -73,7 +82,7 @@ class YouTubeUploader:
             },
         }
 
-        media = MediaFileUpload(video_path, chunksize=-1, resumable=True, mimetype="video/mp4")
+        media = MediaFileUpload(str(local_video), chunksize=-1, resumable=True, mimetype="video/mp4")
         request = self._yt.videos().insert(part="snippet,status", body=body, media_body=media)
 
         response = None
@@ -82,11 +91,13 @@ class YouTubeUploader:
 
         video_id = response["id"]
 
-        if thumbnail_path and Path(thumbnail_path).exists():
-            thumb_media = MediaFileUpload(thumbnail_path, mimetype="image/jpeg")
+        if local_thumb:
+            thumb_media = MediaFileUpload(str(local_thumb), mimetype="image/jpeg")
             self._yt.thumbnails().set(videoId=video_id, media_body=thumb_media).execute()
-        elif thumbnail_path:
-            print(f"[uploader] thumbnail not found, skipping: {thumbnail_path}")
+
+        local_video.unlink(missing_ok=True)
+        if local_thumb:
+            local_thumb.unlink(missing_ok=True)
 
         return video_id
 

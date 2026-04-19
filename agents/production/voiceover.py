@@ -32,6 +32,30 @@ DEFAULT_VOICE = "onyx"
 EDGE_TTS_VOICE = "en-US-AndrewNeural"
 
 
+def _chunk_text(text: str, max_chars: int = 4000) -> list:
+    """Split text into chunks ≤max_chars at sentence boundaries."""
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    chunks = []
+    current = ""
+    for sentence in sentences:
+        if len(sentence) > max_chars:
+            # Sentence itself too long — break at word boundaries
+            for word in sentence.split():
+                if len(current) + len(word) + 1 > max_chars and current:
+                    chunks.append(current.strip())
+                    current = word
+                else:
+                    current = (current + " " + word).strip()
+        elif len(current) + len(sentence) + 1 > max_chars and current:
+            chunks.append(current.strip())
+            current = sentence
+        else:
+            current = (current + " " + sentence).strip()
+    if current:
+        chunks.append(current.strip())
+    return chunks
+
+
 def _clean_for_tts(text: str) -> str:
     """Strip stage directions, B-roll notes, and production metadata from script text."""
     # Remove [B-ROLL: ...] and any other bracketed directions (including multi-line)
@@ -153,14 +177,18 @@ class VoiceoverAgent:
     def _synthesize_openai(self, text: str, audio_path: Path, voice: str) -> List[WordTimestamp]:
         from openai import OpenAI
         client = OpenAI(api_key=self._openai_key)
-        print(f"[voiceover] using OpenAI TTS ({OPENAI_TTS_MODEL}/{voice})")
-        response = client.audio.speech.create(
-            model=OPENAI_TTS_MODEL,
-            voice=voice,
-            input=text,
-            response_format="mp3",
-        )
-        audio_path.write_bytes(response.content)
+        chunks = _chunk_text(text)
+        print(f"[voiceover] using OpenAI TTS ({OPENAI_TTS_MODEL}/{voice}, {len(chunks)} chunk(s))")
+        audio_bytes = b""
+        for chunk in chunks:
+            response = client.audio.speech.create(
+                model=OPENAI_TTS_MODEL,
+                voice=voice,
+                input=chunk,
+                response_format="mp3",
+            )
+            audio_bytes += response.content
+        audio_path.write_bytes(audio_bytes)
         return _build_word_timestamps_from_text(text, audio_path)
 
     async def _synthesize_edge(self, text: str, audio_path: Path) -> List[WordTimestamp]:

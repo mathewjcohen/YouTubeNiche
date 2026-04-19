@@ -3,13 +3,21 @@ import re
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import edge_tts
 from supabase import Client
 from agents.shared.gate_client import GateClient, GateNumber
 from agents.shared.db_retry import execute_with_retry
+from agents.shared.config_loader import get_env
 
-VOICE = "en-US-AriaNeural"
+# OpenAI TTS — used when OPENAI_API_KEY is set
+# Model: tts-1 (fast) or tts-1-hd (higher quality, ~2× cost)
+# Voice: onyx (deep/authoritative male), nova (warm female), alloy, echo, fable, shimmer
+OPENAI_TTS_MODEL = "tts-1-hd"
+OPENAI_TTS_VOICE = "onyx"
+
+# Fallback when no OpenAI key
+EDGE_TTS_VOICE = "en-US-AndrewNeural"
 
 
 def _clean_for_tts(text: str) -> str:
@@ -93,12 +101,71 @@ def build_srt(words: List[WordTimestamp], max_chars_per_cue: int = 80) -> str:
     return "\n".join(lines)
 
 
+def _build_word_timestamps_from_text(text: str, audio_path: Path) -> List[WordTimestamp]:
+    """
+    OpenAI TTS doesn't return word-level timestamps via the standard API.
+    Build approximate timestamps by splitting text into words and distributing
+    evenly across the audio duration using mutagen for the actual MP3 length.
+    """
+    try:
+        from mutagen.mp3 import MP3
+        duration_ms = int(MP3(str(audio_path)).info.length * 1000)
+    except Exception:
+        # Rough fallback: ~150 words per minute
+        word_count = len(text.split())
+        duration_ms = int(word_count / 150 * 60 * 1000)
+
+    words = text.split()
+    if not words:
+        return []
+    per_word_ms = duration_ms // len(words)
+    result = []
+    for i, word in enumerate(words):
+        result.append(WordTimestamp(
+            word=word,
+            offset_ms=i * per_word_ms,
+            duration_ms=per_word_ms,
+        ))
+    return result
+
+
 class VoiceoverAgent:
     def __init__(self, supabase: Client, gate_client: GateClient, output_dir: str = "output/audio"):
         self._sb = supabase
         self._gate = gate_client
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
+        _key = get_env("OPENAI_API_KEY", required=False)
+        self._openai_key: Optional[str] = _key or None
+
+    def _synthesize_openai(self, text: str, audio_path: Path) -> List[WordTimestamp]:
+        from openai import OpenAI
+        client = OpenAI(api_key=self._openai_key)
+        print(f"[voiceover] using OpenAI TTS ({OPENAI_TTS_MODEL}/{OPENAI_TTS_VOICE})")
+        response = client.audio.speech.create(
+            model=OPENAI_TTS_MODEL,
+            voice=OPENAI_TTS_VOICE,
+            input=text,
+            response_format="mp3",
+        )
+        audio_path.write_bytes(response.content)
+        return _build_word_timestamps_from_text(text, audio_path)
+
+    async def _synthesize_edge(self, text: str, audio_path: Path) -> List[WordTimestamp]:
+        print(f"[voiceover] using edge-tts ({EDGE_TTS_VOICE})")
+        communicate = edge_tts.Communicate(text=text, voice=EDGE_TTS_VOICE)
+        words: List[WordTimestamp] = []
+        with audio_path.open("wb") as audio_file:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_file.write(chunk["data"])
+                elif chunk["type"] == "WordBoundary":
+                    words.append(WordTimestamp(
+                        word=chunk["text"],
+                        offset_ms=chunk["offset"] // 10_000,
+                        duration_ms=chunk["duration"] // 10_000,
+                    ))
+        return words
 
     async def synthesize(self, text: str, output_stem: str, max_attempts: int = 3) -> Tuple[Path, Path]:
         text = _clean_for_tts(text)
@@ -108,20 +175,10 @@ class VoiceoverAgent:
         last_exc: Exception = RuntimeError("no attempts made")
         for attempt in range(1, max_attempts + 1):
             try:
-                communicate = edge_tts.Communicate(text=text, voice=VOICE)
-                words: List[WordTimestamp] = []
-                with audio_path.open("wb") as audio_file:
-                    async for chunk in communicate.stream():
-                        if chunk["type"] == "audio":
-                            audio_file.write(chunk["data"])
-                        elif chunk["type"] == "WordBoundary":
-                            words.append(
-                                WordTimestamp(
-                                    word=chunk["text"],
-                                    offset_ms=chunk["offset"] // 10_000,
-                                    duration_ms=chunk["duration"] // 10_000,
-                                )
-                            )
+                if self._openai_key:
+                    words = self._synthesize_openai(text, audio_path)
+                else:
+                    words = await self._synthesize_edge(text, audio_path)
                 srt_content = build_srt(words)
                 srt_path.write_text(srt_content, encoding="utf-8")
                 return audio_path, srt_path

@@ -10,7 +10,8 @@ from supabase import Client
 from agents.shared.gate_client import GateClient, GateNumber
 from agents.shared.config_loader import get_env
 
-THUMB_W, THUMB_H = 1280, 720
+THUMB_W, THUMB_H = 1280, 720          # long-form 16:9
+SHORT_W, SHORT_H = 1080, 1920         # shorts 9:16
 
 _BOLD_CANDIDATES = [
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
@@ -120,7 +121,17 @@ class ThumbnailGenerator:
         self._output_dir.mkdir(parents=True, exist_ok=True)
         self._pexels_key = pexels_api_key
 
-    def render(self, title: str, category: str, output_stem: str, bg: Optional[Image.Image] = None) -> Path:
+    def render(
+        self,
+        title: str,
+        category: str,
+        output_stem: str,
+        bg: Optional[Image.Image] = None,
+        video_type: str = "long",
+    ) -> Path:
+        is_short = video_type == "short"
+        w, h = (SHORT_W, SHORT_H) if is_short else (THUMB_W, THUMB_H)
+
         # 1. Background photo (caller may pass a pre-fetched image to avoid double-fetch)
         if bg is None and self._pexels_key:
             for query in (title, CATEGORY_SEARCH_FALLBACK.get(category, category)):
@@ -135,23 +146,27 @@ class ThumbnailGenerator:
             print("[thumbnail] PEXELS_API_KEY not set — skipping photo fetch")
 
         if bg:
-            img = _fit_crop(bg, THUMB_W, THUMB_H)
+            img = _fit_crop(bg, w, h)
             img = _apply_gradient(img)
         else:
             print(f"[thumbnail] No Pexels photo for '{title}' — using solid fallback")
-            img = Image.new("RGB", (THUMB_W, THUMB_H), (15, 15, 25))
+            img = Image.new("RGB", (w, h), (15, 15, 25))
 
         draw = ImageDraw.Draw(img)
-        font_large = _load_font(_BOLD_CANDIDATES, 88)
 
-        # 2. Wrap and draw title — centered horizontally, 12% padding constrains wrap width
-        pad_x = int(THUMB_W * 0.12)
-        usable_w = THUMB_W - 2 * pad_x
-        wrapped = textwrap.wrap(title, width=20)
-        line_h = 105
+        # Shorts use a larger font (taller canvas) and fewer chars per line
+        font_size = 96 if is_short else 88
+        wrap_width = 16 if is_short else 20
+        line_h = 115 if is_short else 105
+        font_large = _load_font(_BOLD_CANDIDATES, font_size)
+
+        # 2. Wrap and draw title — centered horizontally, 12% side padding
+        pad_x = int(w * 0.12)
+        wrapped = textwrap.wrap(title, width=wrap_width)
         total_h = len(wrapped) * line_h
-        y_start = THUMB_H - 160 - total_h
-        cx = THUMB_W // 2  # horizontal center for anchor="mt"
+        # Shorts: center text vertically in bottom third; long: anchor near bottom
+        y_start = (h * 2 // 3) - (total_h // 2) if is_short else h - 160 - total_h
+        cx = w // 2
 
         for i, line in enumerate(wrapped):
             y = y_start + i * line_h
@@ -202,6 +217,7 @@ class ThumbnailGenerator:
                         category=category,
                         output_stem=stem,
                         bg=shared_bg,
+                        video_type=video_type,
                     )
                 except Exception as exc:
                     print(f"[thumbnail] render failed for {stem}: {exc}")

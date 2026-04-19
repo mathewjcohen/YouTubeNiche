@@ -68,10 +68,6 @@ export default async function MediaPage() {
 }
 
 function ScriptGroupCard({ group }: { group: ScriptGroup }) {
-  const previewVideo = group.videos.find(
-    (v) => v.gate6_state === 'awaiting_review' && v.video_path?.startsWith('http')
-  )
-
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-5">
       <div className="flex gap-5">
@@ -125,14 +121,27 @@ function ScriptGroupCard({ group }: { group: ScriptGroup }) {
             )
             if (!pendingGates.length) return null
             return (
-              <div key={v.id} className="mb-2">
+              <div key={v.id} className="mb-3">
                 <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-1.5">
                   {v.video_type}
                 </p>
-                <div className="flex gap-2 flex-wrap">
+                <div className="space-y-2">
                   {pendingGates.map((gate) => (
                     <div key={gate} className="border border-orange-700/50 rounded p-3 bg-orange-900/20">
                       <p className="text-xs font-semibold text-orange-400 mb-2">Gate {gate} — {GATE_LABELS[gate]}</p>
+
+                      {/* Audio player for voiceover review */}
+                      {gate === 4 && v.audio_path?.startsWith('http') && (
+                        // eslint-disable-next-line jsx-a11y/media-has-caption
+                        <audio controls className="w-full mb-2" src={v.audio_path} />
+                      )}
+
+                      {/* Video player for final video review */}
+                      {gate === 6 && v.video_path?.startsWith('http') && (
+                        // eslint-disable-next-line jsx-a11y/media-has-caption
+                        <video controls className="w-full rounded mb-2 max-h-48" src={v.video_path} />
+                      )}
+
                       <div className="flex gap-2 flex-wrap">
                         <form action={approveMedia.bind(null, v.id, gate)}>
                           <button className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700">
@@ -157,13 +166,6 @@ function ScriptGroupCard({ group }: { group: ScriptGroup }) {
           })}
         </div>
       </div>
-
-      {previewVideo && (
-        <div className="mt-4">
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <video controls className="w-full rounded max-h-64" src={previewVideo.video_path!} />
-        </div>
-      )}
     </div>
   )
 }

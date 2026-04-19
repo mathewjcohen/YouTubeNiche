@@ -1,5 +1,6 @@
 export type NicheStatus = 'candidate' | 'testing' | 'promoted' | 'archived'
 export type GateState =
+  | 'pending'
   | 'awaiting_review'
   | 'approved'
   | 'rejected'
@@ -66,6 +67,7 @@ export interface Video {
   script_id: string
   niche_id: string
   video_type: 'long' | 'short'
+  status: string
   audio_path: string | null
   srt_path: string | null
   video_path: string | null

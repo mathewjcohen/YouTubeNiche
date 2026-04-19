@@ -71,3 +71,27 @@ export async function retryThumbnailForScript(scriptId: string): Promise<void> {
   if (error) throw new Error(error.message)
   revalidatePath('/media')
 }
+
+export async function retryVoiceover(scriptId: string): Promise<void> {
+  const supabase = await createClient()
+  // Delete all video rows — voiceover agent will recreate them on next run
+  const { error: delError } = await supabase.from('videos').delete().eq('script_id', scriptId)
+  if (delError) throw new Error(delError.message)
+  // Reset script so the voiceover stage picks it up again
+  const { error: updError } = await supabase
+    .from('scripts')
+    .update({ status: 'pending' })
+    .eq('id', scriptId)
+  if (updError) throw new Error(updError.message)
+  revalidatePath('/media')
+}
+
+export async function retryVideoAssembly(videoId: string): Promise<void> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('videos')
+    .update({ video_path: null, gate4_state: 'approved', gate6_state: 'pending', status: 'pending' })
+    .eq('id', videoId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/media')
+}

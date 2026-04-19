@@ -1,5 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
-import { approveMedia, rejectMedia, approveGate5ForScript, rejectGate5ForScript, retryThumbnailForScript } from '@/app/actions/media'
+import {
+  approveMedia, rejectMedia,
+  approveGate5ForScript, rejectGate5ForScript, retryThumbnailForScript,
+  retryVoiceover, retryVideoAssembly,
+} from '@/app/actions/media'
 import type { Video } from '@/lib/types'
 
 const GATE_LABELS: Record<4 | 5 | 6, string> = {
@@ -35,7 +39,7 @@ function groupByScript(videos: VideoRow[]): ScriptGroup[] {
     nicheName: group[0].niches?.name ?? '',
     longThumbnail: group.find((v) => v.video_type === 'long' && v.thumbnail_path?.startsWith('http'))?.thumbnail_path,
     shortThumbnail: group.find((v) => v.video_type === 'short' && v.thumbnail_path?.startsWith('http'))?.thumbnail_path,
-    showGate5: group.some((v) => v.gate5_state === 'awaiting_review'),
+    showGate5: group.some((v) => v.gate5_state === 'awaiting_review' || v.gate5_state === 'rejected'),
     videos: group,
   }))
 }
@@ -45,7 +49,11 @@ export default async function MediaPage() {
   const { data: videos } = await supabase
     .from('videos')
     .select('*, scripts(youtube_title, long_form_text), niches(name)')
-    .or('gate4_state.eq.awaiting_review,gate5_state.eq.awaiting_review,gate6_state.eq.awaiting_review')
+    .or(
+      'gate4_state.in.(awaiting_review,rejected),' +
+      'gate5_state.in.(awaiting_review,rejected),' +
+      'gate6_state.in.(awaiting_review,rejected)'
+    )
     .order('created_at')
 
   const rows = (videos ?? []) as VideoRow[]
@@ -69,6 +77,22 @@ export default async function MediaPage() {
   )
 }
 
+function GateBadge({ isRejected, label }: { isRejected: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-2">
+      <p className={`text-xs font-semibold ${isRejected ? 'text-red-400' : 'text-orange-400'}`}>{label}</p>
+      {isRejected && (
+        <span className="text-xs text-red-400 bg-red-900/40 px-1.5 py-0.5 rounded">Rejected</span>
+      )}
+    </div>
+  )
+}
+
+function RejectionReason({ reason }: { reason: string | null | undefined }) {
+  if (!reason) return null
+  return <p className="text-xs text-red-300 mb-2 italic">&ldquo;{reason}&rdquo;</p>
+}
+
 function ScriptGroupCard({ group }: { group: ScriptGroup }) {
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-5">
@@ -89,102 +113,132 @@ function ScriptGroupCard({ group }: { group: ScriptGroup }) {
           <p className="text-xs text-gray-500 mb-3">{group.nicheName}</p>
 
           {/* Gate 5 — thumbnail, shared across all formats */}
-          {group.showGate5 && (
-            <div className="border border-orange-700/50 rounded p-3 bg-orange-900/20 mb-3">
-              <p className="text-xs font-semibold text-orange-400 mb-2">Gate 5 — Thumbnail</p>
-              <div className="flex gap-3 mb-3">
-                {group.longThumbnail && (
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">Long</span>
-                    <a href={group.longThumbnail} target="_blank" rel="noreferrer">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={group.longThumbnail} alt="long thumbnail" className="w-32 rounded hover:opacity-80 transition-opacity" />
-                    </a>
-                  </div>
-                )}
-                {group.shortThumbnail && (
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">Short</span>
-                    <a href={group.shortThumbnail} target="_blank" rel="noreferrer">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={group.shortThumbnail} alt="short thumbnail" className="h-24 rounded hover:opacity-80 transition-opacity" />
-                    </a>
-                  </div>
-                )}
-                {!group.longThumbnail && !group.shortThumbnail && (
-                  <p className="text-xs text-gray-500">Thumbnails not yet generated</p>
-                )}
+          {group.showGate5 && (() => {
+            const gate5Video = group.videos.find(v => v.gate5_state === 'awaiting_review' || v.gate5_state === 'rejected')
+            const isRejected = gate5Video?.gate5_state === 'rejected'
+            const reason = gate5Video?.gate5_rejection_reason
+            return (
+              <div className={`border rounded p-3 mb-3 ${isRejected ? 'border-red-700/50 bg-red-900/20' : 'border-orange-700/50 bg-orange-900/20'}`}>
+                <GateBadge isRejected={isRejected ?? false} label="Gate 5 — Thumbnail" />
+                <RejectionReason reason={reason} />
+                <div className="flex gap-3 mb-3">
+                  {group.longThumbnail && (
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">Long</span>
+                      <a href={group.longThumbnail} target="_blank" rel="noreferrer">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={group.longThumbnail} alt="long thumbnail" className="w-32 rounded hover:opacity-80 transition-opacity" />
+                      </a>
+                    </div>
+                  )}
+                  {group.shortThumbnail && (
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">Short</span>
+                      <a href={group.shortThumbnail} target="_blank" rel="noreferrer">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={group.shortThumbnail} alt="short thumbnail" className="h-24 rounded hover:opacity-80 transition-opacity" />
+                      </a>
+                    </div>
+                  )}
+                  {!group.longThumbnail && !group.shortThumbnail && (
+                    <p className="text-xs text-gray-500">Thumbnails not yet generated</p>
+                  )}
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {!isRejected && (
+                    <>
+                      <form action={approveGate5ForScript.bind(null, group.scriptId)}>
+                        <button className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700">
+                          Approve
+                        </button>
+                      </form>
+                      <form action={async (fd: FormData) => {
+                        'use server'
+                        await rejectGate5ForScript(group.scriptId, fd.get('reason') as string || 'Rejected')
+                      }}>
+                        <input name="reason" placeholder="Reason" className="border border-gray-600 bg-gray-700 text-gray-100 placeholder:text-gray-500 rounded px-2 py-1 text-xs w-32" />
+                        <button className="bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded hover:bg-gray-600 ml-1">
+                          Reject
+                        </button>
+                      </form>
+                    </>
+                  )}
+                  <form action={retryThumbnailForScript.bind(null, group.scriptId)}>
+                    <button className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
+                      Retry
+                    </button>
+                  </form>
+                </div>
               </div>
-              <div className="flex gap-2 flex-wrap">
-                <form action={approveGate5ForScript.bind(null, group.scriptId)}>
-                  <button className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700">
-                    Approve
-                  </button>
-                </form>
-                <form action={async (fd: FormData) => {
-                  'use server'
-                  await rejectGate5ForScript(group.scriptId, fd.get('reason') as string || 'Rejected')
-                }}>
-                  <input name="reason" placeholder="Reason" className="border border-gray-600 bg-gray-700 text-gray-100 placeholder:text-gray-500 rounded px-2 py-1 text-xs w-32" />
-                  <button className="bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded hover:bg-gray-600 ml-1">
-                    Reject
-                  </button>
-                </form>
-                <form action={retryThumbnailForScript.bind(null, group.scriptId)}>
-                  <button className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
-                    Retry
-                  </button>
-                </form>
-              </div>
-            </div>
-          )}
+            )
+          })()}
 
           {/* Gates 4 and 6 — per video format */}
           {group.videos.map((v) => {
-            const pendingGates = ([4, 6] as const).filter(
-              (g) => v[`gate${g}_state`] === 'awaiting_review'
+            const activeGates = ([4, 6] as const).filter(
+              (g) => v[`gate${g}_state`] === 'awaiting_review' || v[`gate${g}_state`] === 'rejected'
             )
-            if (!pendingGates.length) return null
+            if (!activeGates.length) return null
             return (
               <div key={v.id} className="mb-3">
                 <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-1.5">
                   {v.video_type}
                 </p>
                 <div className="space-y-2">
-                  {pendingGates.map((gate) => (
-                    <div key={gate} className="border border-orange-700/50 rounded p-3 bg-orange-900/20">
-                      <p className="text-xs font-semibold text-orange-400 mb-2">Gate {gate} — {GATE_LABELS[gate]}</p>
+                  {activeGates.map((gate) => {
+                    const state = v[`gate${gate}_state`]
+                    const reason = v[`gate${gate}_rejection_reason`]
+                    const isRejected = state === 'rejected'
+                    return (
+                      <div key={gate} className={`border rounded p-3 ${isRejected ? 'border-red-700/50 bg-red-900/20' : 'border-orange-700/50 bg-orange-900/20'}`}>
+                        <GateBadge isRejected={isRejected} label={`Gate ${gate} — ${GATE_LABELS[gate]}`} />
+                        <RejectionReason reason={reason} />
 
-                      {/* Audio player for voiceover review */}
-                      {gate === 4 && v.audio_path?.startsWith('http') && (
-                        // eslint-disable-next-line jsx-a11y/media-has-caption
-                        <audio controls className="w-full mb-2" src={v.audio_path} />
-                      )}
+                        {gate === 4 && v.audio_path?.startsWith('http') && (
+                          // eslint-disable-next-line jsx-a11y/media-has-caption
+                          <audio controls className="w-full mb-2" src={v.audio_path} />
+                        )}
 
-                      {/* Video player for final video review */}
-                      {gate === 6 && v.video_path?.startsWith('http') && (
-                        // eslint-disable-next-line jsx-a11y/media-has-caption
-                        <video controls className="w-full rounded mb-2 max-h-48" src={v.video_path} />
-                      )}
+                        {gate === 6 && v.video_path?.startsWith('http') && (
+                          // eslint-disable-next-line jsx-a11y/media-has-caption
+                          <video controls className="w-full rounded mb-2 max-h-48" src={v.video_path} />
+                        )}
 
-                      <div className="flex gap-2 flex-wrap">
-                        <form action={approveMedia.bind(null, v.id, gate)}>
-                          <button className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700">
-                            Approve
-                          </button>
-                        </form>
-                        <form action={async (fd: FormData) => {
-                          'use server'
-                          await rejectMedia(v.id, gate, fd.get('reason') as string || 'Rejected')
-                        }}>
-                          <input name="reason" placeholder="Reason" className="border border-gray-600 bg-gray-700 text-gray-100 placeholder:text-gray-500 rounded px-2 py-1 text-xs w-32" />
-                          <button className="bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded hover:bg-gray-600 ml-1">
-                            Reject
-                          </button>
-                        </form>
+                        <div className="flex gap-2 flex-wrap">
+                          {!isRejected ? (
+                            <>
+                              <form action={approveMedia.bind(null, v.id, gate)}>
+                                <button className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700">
+                                  Approve
+                                </button>
+                              </form>
+                              <form action={async (fd: FormData) => {
+                                'use server'
+                                await rejectMedia(v.id, gate, fd.get('reason') as string || 'Rejected')
+                              }}>
+                                <input name="reason" placeholder="Reason" className="border border-gray-600 bg-gray-700 text-gray-100 placeholder:text-gray-500 rounded px-2 py-1 text-xs w-32" />
+                                <button className="bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded hover:bg-gray-600 ml-1">
+                                  Reject
+                                </button>
+                              </form>
+                            </>
+                          ) : gate === 4 ? (
+                            <form action={retryVoiceover.bind(null, v.script_id)}>
+                              <button className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
+                                Retry Voiceover
+                              </button>
+                            </form>
+                          ) : (
+                            <form action={retryVideoAssembly.bind(null, v.id)}>
+                              <button className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
+                                Retry Assembly
+                              </button>
+                            </form>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { StatusPill } from '@/components/status-pill'
+import { ScoreTooltip } from '@/components/score-tooltip'
 import { activateNiche, dismissNiche, archiveNiche, submitManualNiche } from '@/app/actions/niches'
 import type { Niche, NicheStatus } from '@/lib/types'
 
@@ -94,9 +95,7 @@ function NicheRow({ niche }: { niche: Niche }) {
       ) : niche.status === 'promoted' ? (
         <span className="text-xs text-orange-400 border border-orange-800 rounded px-2 py-0.5">No channel</span>
       ) : null}
-      {niche.score != null && (
-        <span className="text-sm text-gray-400">Score: {niche.score.toFixed(2)}</span>
-      )}
+      {niche.score != null && <ScoreTooltip score={niche.score} />}
       <div className="flex gap-2">
         {niche.gate1_state === 'awaiting_review' && (
           <>

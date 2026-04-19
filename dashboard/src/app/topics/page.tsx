@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { approveTopic, rejectTopic } from '@/app/actions/topics'
+import { approveTopic, rejectTopic, approveTopBatch } from '@/app/actions/topics'
 import type { Topic } from '@/lib/types'
 
 export default async function TopicsPage() {
@@ -12,7 +12,28 @@ export default async function TopicsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">Topic Queue</h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-2xl font-bold">Topic Queue</h1>
+        {(topics?.length ?? 0) > 0 && (
+          <form action={approveTopBatch} className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">Approve top</span>
+            <input
+              name="count"
+              type="number"
+              min={1}
+              max={20}
+              defaultValue={3}
+              className="w-14 border border-gray-600 bg-gray-700 text-gray-100 rounded px-2 py-1 text-xs text-center"
+            />
+            <button
+              type="submit"
+              className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700 whitespace-nowrap"
+            >
+              Approve Batch
+            </button>
+          </form>
+        )}
+      </div>
       <p className="text-sm text-gray-500 mb-6">Gate 2 — {topics?.length ?? 0} awaiting review</p>
 
       {!topics?.length ? (

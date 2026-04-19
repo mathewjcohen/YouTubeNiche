@@ -14,7 +14,7 @@ export default async function NichesPage() {
   const supabase = await createClient()
   const { data: niches } = await supabase
     .from('niches')
-    .select('*')
+    .select('*, youtube_accounts(channel_name, channel_id)')
     .order('score', { ascending: false })
 
   const grouped = STATUS_ORDER.reduce<Record<NicheStatus, Niche[]>>(
@@ -88,7 +88,9 @@ function NicheRow({ niche }: { niche: Niche }) {
         <p className="text-xs text-gray-500">{niche.category}{niche.niche_source === 'manual' ? ' · [manual]' : ''}</p>
       </div>
       {niche.channel_state === 'linked' ? (
-        <span className="text-xs text-green-400 border border-green-800 rounded px-2 py-0.5">Channel linked</span>
+        <span className="text-xs text-green-400 border border-green-800 rounded px-2 py-0.5">
+          {niche.youtube_accounts?.channel_name ?? 'Channel linked'}
+        </span>
       ) : niche.status === 'promoted' ? (
         <span className="text-xs text-orange-400 border border-orange-800 rounded px-2 py-0.5">No channel</span>
       ) : null}

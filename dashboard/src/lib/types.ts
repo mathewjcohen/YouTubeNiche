@@ -31,6 +31,7 @@ export interface Niche {
   created_at: string
   channel_state: ChannelState
   youtube_account_id: string | null
+  youtube_accounts: { channel_name: string; channel_id: string | null } | null
 }
 
 export interface Topic {

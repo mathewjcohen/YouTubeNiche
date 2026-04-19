@@ -131,15 +131,19 @@ class ThumbnailGenerator:
                 try:
                     bg = _pexels_photo(query, self._pexels_key)
                     if bg:
+                        print(f"[thumbnail] Pexels photo fetched for query: '{query}'")
                         break
-                except Exception:
+                except Exception as exc:
+                    print(f"[thumbnail] Pexels fetch failed for query '{query}': {type(exc).__name__}: {exc}")
                     continue
+        else:
+            print("[thumbnail] PEXELS_API_KEY not set — skipping photo fetch")
 
         if bg:
             img = _fit_crop(bg, THUMB_W, THUMB_H)
             img = _apply_gradient(img)
         else:
-            # Fallback: dark solid color (better than nothing)
+            print(f"[thumbnail] No Pexels photo for '{title}' — using solid fallback")
             img = Image.new("RGB", (THUMB_W, THUMB_H), (15, 15, 25))
 
         draw = ImageDraw.Draw(img)

@@ -32,5 +32,20 @@ export async function setPipelineEnabled(formData: FormData): Promise<void> {
   await supabase
     .from('app_settings')
     .upsert({ key: 'pipeline_enabled', value: enabled ? 'true' : 'false' }, { onConflict: 'key' })
+
+  const pat = process.env.GITHUB_PAT
+  const repo = process.env.GITHUB_REPO
+  if (pat && repo) {
+    const action = enabled ? 'enable' : 'disable'
+    await fetch(`https://api.github.com/repos/${repo}/actions/workflows/pipeline_runner.yml/${action}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${pat}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    })
+  }
+
   revalidatePath('/settings')
 }

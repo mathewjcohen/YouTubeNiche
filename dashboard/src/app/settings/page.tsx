@@ -53,7 +53,7 @@ export default async function SettingsPage() {
             {pipelineEnabled ? 'Running' : 'Paused'}
           </span>
         </div>
-        <p className="text-xs text-gray-500 mb-4">Pausing stops all automated content generation and uploads. Manual workflow_dispatch runs are unaffected.</p>
+        <p className="text-xs text-gray-500 mb-4">Pausing disables the pipeline_runner GitHub Actions workflow — no scheduled runs will fire. Resume re-enables it.</p>
         <form action={setPipelineEnabled}>
           <input type="hidden" name="pipeline_enabled" value={pipelineEnabled ? 'false' : 'true'} />
           <button

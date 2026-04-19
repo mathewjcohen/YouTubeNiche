@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Remotion Lambda composition for YouTube video assembly",
   "scripts": {
-    "deploy:fn": "npx remotion lambda functions deploy --memory=3009 --disk=10240 --timeout=900",
+    "deploy:fn": "npx remotion lambda functions deploy --memory=3008 --disk=10240 --timeout=900",
     "deploy:site": "npx remotion lambda sites create --site-name=youtube-niche",
     "deploy": "npm run deploy:fn && npm run deploy:site",
     "studio": "npx remotion studio"

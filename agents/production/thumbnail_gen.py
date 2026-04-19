@@ -144,21 +144,19 @@ class ThumbnailGenerator:
         draw = ImageDraw.Draw(img)
         font_large = _load_font(_BOLD_CANDIDATES, 88)
 
-        # 2. Wrap and draw title with 12% horizontal padding
+        # 2. Wrap and draw title — centered horizontally, 12% padding constrains wrap width
         pad_x = int(THUMB_W * 0.12)
         usable_w = THUMB_W - 2 * pad_x
         wrapped = textwrap.wrap(title, width=20)
         line_h = 105
         total_h = len(wrapped) * line_h
         y_start = THUMB_H - 160 - total_h
+        cx = THUMB_W // 2  # horizontal center for anchor="mt"
 
         for i, line in enumerate(wrapped):
-            bbox = draw.textbbox((0, 0), line, font=font_large)
-            text_w = bbox[2] - bbox[0]
-            x = pad_x + max(0, (usable_w - text_w) // 2)
             y = y_start + i * line_h
-            draw.text((x + 3, y + 3), line, font=font_large, fill=(0, 0, 0, 180))
-            draw.text((x, y), line, font=font_large, fill=(255, 255, 255))
+            draw.text((cx + 3, y + 3), line, font=font_large, fill=(0, 0, 0, 180), anchor="mt")
+            draw.text((cx, y), line, font=font_large, fill=(255, 255, 255), anchor="mt")
 
         out_path = self._output_dir / f"{output_stem}.jpg"
         img.save(str(out_path), "JPEG", quality=92)

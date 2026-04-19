@@ -3,14 +3,13 @@ import re
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple, Optional
-import edge_tts
+from typing import List, Tuple
 from supabase import Client
 from agents.shared.gate_client import GateClient, GateNumber
 from agents.shared.db_retry import execute_with_retry
 from agents.shared.config_loader import get_env
 
-# OpenAI TTS — used when OPENAI_API_KEY is set
+# OpenAI TTS
 OPENAI_TTS_MODEL = "tts-1-hd"
 
 # Per-category voice selection
@@ -27,9 +26,6 @@ CATEGORY_VOICE: dict[str, str] = {
     "health":           "nova",
 }
 DEFAULT_VOICE = "onyx"
-
-# Fallback when no OpenAI key
-EDGE_TTS_VOICE = "en-US-AndrewNeural"
 
 
 def _chunk_text(text: str, max_chars: int = 4000) -> list:
@@ -171,8 +167,7 @@ class VoiceoverAgent:
         self._gate = gate_client
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
-        _key = get_env("OPENAI_API_KEY", required=False)
-        self._openai_key: Optional[str] = _key or None
+        self._openai_key: str = get_env("OPENAI_API_KEY")
 
     def _synthesize_openai(self, text: str, audio_path: Path, voice: str) -> List[WordTimestamp]:
         from openai import OpenAI
@@ -191,22 +186,6 @@ class VoiceoverAgent:
         audio_path.write_bytes(audio_bytes)
         return _build_word_timestamps_from_text(text, audio_path)
 
-    async def _synthesize_edge(self, text: str, audio_path: Path) -> List[WordTimestamp]:
-        print(f"[voiceover] using edge-tts ({EDGE_TTS_VOICE})")
-        communicate = edge_tts.Communicate(text=text, voice=EDGE_TTS_VOICE)
-        words: List[WordTimestamp] = []
-        with audio_path.open("wb") as audio_file:
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    audio_file.write(chunk["data"])
-                elif chunk["type"] == "WordBoundary":
-                    words.append(WordTimestamp(
-                        word=chunk["text"],
-                        offset_ms=chunk["offset"] // 10_000,
-                        duration_ms=chunk["duration"] // 10_000,
-                    ))
-        return words
-
     async def synthesize(self, text: str, output_stem: str, category: str = "", max_attempts: int = 3) -> Tuple[Path, Path]:
         text = _clean_for_tts(text)
         audio_path = self._output_dir / f"{output_stem}.mp3"
@@ -216,10 +195,7 @@ class VoiceoverAgent:
         last_exc: Exception = RuntimeError("no attempts made")
         for attempt in range(1, max_attempts + 1):
             try:
-                if self._openai_key:
-                    words = self._synthesize_openai(text, audio_path, voice)
-                else:
-                    words = await self._synthesize_edge(text, audio_path)
+                words = self._synthesize_openai(text, audio_path, voice)
                 srt_content = build_srt(words)
                 srt_path.write_text(srt_content, encoding="utf-8")
                 return audio_path, srt_path

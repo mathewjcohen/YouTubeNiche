@@ -92,6 +92,12 @@ class ThumbnailGenerator:
         img.save(str(out_path), "JPEG", quality=95)
         return out_path
 
+    def _upload(self, local_path: Path) -> str:
+        self._sb.storage.from_("thumbnails").upload(
+            local_path.name, local_path.read_bytes(), {"content-type": "image/jpeg"}
+        )
+        return self._sb.storage.from_("thumbnails").get_public_url(local_path.name)
+
     def process_approved_scripts(self, niche_id: str) -> None:
         if not self._sb or not self._gate:
             raise RuntimeError("supabase and gate_client required for pipeline use")
@@ -120,9 +126,10 @@ class ThumbnailGenerator:
                     .execute()
                     .data
                 )
+                thumb_url = self._upload(out)
                 for video in videos:
                     self._sb.table("videos").update(
-                        {"thumbnail_path": str(out)}
+                        {"thumbnail_path": thumb_url}
                     ).eq("id", video["id"]).execute()
                     self._gate.advance_or_pause(
                         gate=GateNumber.THUMBNAIL,

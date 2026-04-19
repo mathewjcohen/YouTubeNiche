@@ -43,6 +43,8 @@ function MediaCard({ video }: {
     (g) => video[`gate${g}_state`] === 'awaiting_review'
   )
 
+  const showVideo = pendingGates.includes(6) && video.video_path?.startsWith('http')
+
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-5">
       <div className="flex gap-5">
@@ -59,7 +61,7 @@ function MediaCard({ video }: {
           <p className="font-semibold text-gray-100">{video.scripts?.youtube_title ?? '—'}</p>
           <p className="text-xs text-gray-500">{video.niches?.name}</p>
 
-          <div className="flex gap-3 mt-3">
+          <div className="flex gap-3 mt-3 flex-wrap">
             {pendingGates.map((gate) => (
               <div key={gate} className="border border-orange-700/50 rounded p-3 bg-orange-900/20">
                 <p className="text-xs font-semibold text-orange-400 mb-2">Gate {gate} — {GATE_LABELS[gate]}</p>
@@ -84,6 +86,13 @@ function MediaCard({ video }: {
           </div>
         </div>
       </div>
+
+      {showVideo && (
+        <div className="mt-4">
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <video controls className="w-full rounded max-h-64" src={video.video_path!} />
+        </div>
+      )}
     </div>
   )
 }

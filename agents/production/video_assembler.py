@@ -81,7 +81,7 @@ class VideoAssembler:
         srt_path: str,
         script_text: str,
         output_stem: str,
-    ) -> Path:
+    ) -> str:
         tags = extract_scene_tags(script_text)
         if not tags:
             tags = ["nature background", "city timelapse", "office work"]
@@ -128,7 +128,11 @@ class VideoAssembler:
                 remove_temp=True,
                 logger=None,
             )
-            return out_path
+
+        self._sb.storage.from_("videos").upload(
+            out_path.name, out_path.read_bytes(), {"content-type": "video/mp4"}
+        )
+        return self._sb.storage.from_("videos").get_public_url(out_path.name)
 
     def process_approved_voiceovers(self, niche_id: str) -> None:
         videos = execute_with_retry(
@@ -157,6 +161,6 @@ class VideoAssembler:
             )
             execute_with_retry(
                 self._sb.table("videos").update(
-                    {"video_path": str(out_path), "status": "processing"}
+                    {"video_path": out_path, "status": "processing"}
                 ).eq("id", video["id"])
             )

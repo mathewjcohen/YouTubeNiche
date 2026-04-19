@@ -72,7 +72,11 @@ class PipelineRunner:
 
     def _run_thumbnail_gen(self, niche: dict) -> None:
         from agents.production.thumbnail_gen import ThumbnailGenerator
-        gen = ThumbnailGenerator(supabase=self._sb, gate_client=self._gate)
+        gen = ThumbnailGenerator(
+            supabase=self._sb,
+            gate_client=self._gate,
+            pexels_api_key=get_env("PEXELS_API_KEY"),
+        )
         gen.process_approved_scripts(niche["id"])
 
     def _run_scriptwriter(self, niche: dict) -> None:

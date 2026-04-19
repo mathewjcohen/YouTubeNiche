@@ -31,3 +31,13 @@ export async function rejectMedia(id: string, gate: MediaGate, reason: string): 
   if (error) throw new Error(error.message)
   revalidatePath('/media')
 }
+
+export async function retryThumbnail(id: string): Promise<void> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('videos')
+    .update({ thumbnail_path: null, gate5_state: 'awaiting_review' })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/media')
+}

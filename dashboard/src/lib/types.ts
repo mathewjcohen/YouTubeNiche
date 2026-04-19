@@ -65,6 +65,7 @@ export interface Video {
   id: string
   script_id: string
   niche_id: string
+  video_type: 'long' | 'short'
   audio_path: string | null
   srt_path: string | null
   video_path: string | null

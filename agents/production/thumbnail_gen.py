@@ -120,13 +120,9 @@ class ThumbnailGenerator:
         self._output_dir.mkdir(parents=True, exist_ok=True)
         self._pexels_key = pexels_api_key
 
-    def render(self, title: str, category: str, output_stem: str) -> Path:
-        accent = CATEGORY_ACCENT.get(category, DEFAULT_ACCENT)
-
-        # 1. Fetch background photo from Pexels
-        bg = None
-        if self._pexels_key:
-            # Try the title first, fall back to category keyword
+    def render(self, title: str, category: str, output_stem: str, bg: Optional[Image.Image] = None) -> Path:
+        # 1. Background photo (caller may pass a pre-fetched image to avoid double-fetch)
+        if bg is None and self._pexels_key:
             for query in (title, CATEGORY_SEARCH_FALLBACK.get(category, category)):
                 try:
                     bg = _pexels_photo(query, self._pexels_key)
@@ -135,8 +131,7 @@ class ThumbnailGenerator:
                         break
                 except Exception as exc:
                     print(f"[thumbnail] Pexels fetch failed for query '{query}': {type(exc).__name__}: {exc}")
-                    continue
-        else:
+        elif bg is None:
             print("[thumbnail] PEXELS_API_KEY not set — skipping photo fetch")
 
         if bg:
@@ -148,36 +143,22 @@ class ThumbnailGenerator:
 
         draw = ImageDraw.Draw(img)
         font_large = _load_font(_BOLD_CANDIDATES, 88)
-        font_small = _load_font(_REGULAR_CANDIDATES, 38)
 
-        # 2. Wrap and draw title in lower portion
-        wrapped = textwrap.wrap(title, width=24)
+        # 2. Wrap and draw title with 12% horizontal padding
+        pad_x = int(THUMB_W * 0.12)
+        usable_w = THUMB_W - 2 * pad_x
+        wrapped = textwrap.wrap(title, width=20)
         line_h = 105
         total_h = len(wrapped) * line_h
-        # Position text in bottom third
         y_start = THUMB_H - 160 - total_h
 
         for i, line in enumerate(wrapped):
             bbox = draw.textbbox((0, 0), line, font=font_large)
             text_w = bbox[2] - bbox[0]
-            x = (THUMB_W - text_w) // 2
+            x = pad_x + max(0, (usable_w - text_w) // 2)
             y = y_start + i * line_h
-            # Soft shadow
             draw.text((x + 3, y + 3), line, font=font_large, fill=(0, 0, 0, 180))
             draw.text((x, y), line, font=font_large, fill=(255, 255, 255))
-
-        # 3. Accent bar at very bottom with category label
-        bar_h = 60
-        draw.rectangle([(0, THUMB_H - bar_h), (THUMB_W, THUMB_H)], fill=accent)
-        cat_label = category.replace("_", " ").upper()
-        bbox = draw.textbbox((0, 0), cat_label, font=font_small)
-        label_w = bbox[2] - bbox[0]
-        draw.text(
-            ((THUMB_W - label_w) // 2, THUMB_H - bar_h + 12),
-            cat_label,
-            font=font_small,
-            fill=(0, 0, 0),
-        )
 
         out_path = self._output_dir / f"{output_stem}.jpg"
         img.save(str(out_path), "JPEG", quality=92)
@@ -204,6 +185,17 @@ class ThumbnailGenerator:
         )
         for script in scripts:
             category = script["niches"]["category"]
+            # Fetch Pexels photo once per script; reuse for both long and short
+            shared_bg: Optional[Image.Image] = None
+            if self._pexels_key:
+                for query in (script["youtube_title"], CATEGORY_SEARCH_FALLBACK.get(category, category)):
+                    try:
+                        shared_bg = _pexels_photo(query, self._pexels_key)
+                        if shared_bg:
+                            print(f"[thumbnail] Pexels photo fetched for query: '{query}'")
+                            break
+                    except Exception as exc:
+                        print(f"[thumbnail] Pexels fetch failed for query '{query}': {type(exc).__name__}: {exc}")
             for video_type in ("long", "short"):
                 stem = f"{script['id'][:8]}_{video_type}_thumb"
                 try:
@@ -211,6 +203,7 @@ class ThumbnailGenerator:
                         title=script["youtube_title"],
                         category=category,
                         output_stem=stem,
+                        bg=shared_bg,
                     )
                 except Exception as exc:
                     print(f"[thumbnail] render failed for {stem}: {exc}")

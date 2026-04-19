@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { approveMedia, rejectMedia } from '@/app/actions/media'
+import { approveMedia, rejectMedia, retryThumbnail } from '@/app/actions/media'
 import type { Video } from '@/lib/types'
 
 const GATE_LABELS: Record<4 | 5 | 6, string> = {
@@ -27,7 +27,7 @@ export default async function MediaPage() {
         <p className="text-gray-500">Queue is empty.</p>
       ) : (
         <div className="space-y-4">
-          {(videos as (Video & { scripts: { youtube_title: string | null; long_form_text: string }; niches: { name: string } })[]).map((v) => (
+          {(videos as (Video & { scripts: { youtube_title: string | null; long_form_text: string }; niches: { name: string }; })[]).map((v) => (
             <MediaCard key={v.id} video={v} />
           ))}
         </div>
@@ -61,13 +61,18 @@ function MediaCard({ video }: {
 
         <div className="flex-1">
           <p className="font-semibold text-gray-100">{video.scripts?.youtube_title ?? '—'}</p>
-          <p className="text-xs text-gray-500">{video.niches?.name}</p>
+          <p className="text-xs text-gray-500">
+            {video.niches?.name}
+            <span className="ml-2 px-1.5 py-0.5 bg-gray-700 rounded text-gray-400 uppercase text-[10px] font-medium">
+              {video.video_type}
+            </span>
+          </p>
 
           <div className="flex gap-3 mt-3 flex-wrap">
             {pendingGates.map((gate) => (
               <div key={gate} className="border border-orange-700/50 rounded p-3 bg-orange-900/20">
                 <p className="text-xs font-semibold text-orange-400 mb-2">Gate {gate} — {GATE_LABELS[gate]}</p>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <form action={approveMedia.bind(null, video.id, gate)}>
                     <button className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700">
                       Approve
@@ -82,6 +87,13 @@ function MediaCard({ video }: {
                       Reject
                     </button>
                   </form>
+                  {gate === 5 && (
+                    <form action={retryThumbnail.bind(null, video.id)}>
+                      <button className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
+                        Retry
+                      </button>
+                    </form>
+                  )}
                 </div>
               </div>
             ))}

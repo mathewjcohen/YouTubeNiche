@@ -7,11 +7,15 @@ from agents.shared.db_retry import execute_with_retry, patch_postgrest_http1
 STAGES = os.environ.get("PIPELINE_STAGES", "all")  # "fast" | "slow" | "all"
 
 
-def get_render_method(sb: Client) -> str:
+def get_app_setting(sb: Client, key: str, default: str) -> str:
     rows = execute_with_retry(
-        sb.table("app_settings").select("value").eq("key", "render_method").limit(1)
+        sb.table("app_settings").select("value").eq("key", key).limit(1)
     ).data
-    return rows[0]["value"] if rows else "github"
+    return rows[0]["value"] if rows else default
+
+
+def get_render_method(sb: Client) -> str:
+    return get_app_setting(sb, "render_method", "github")
 
 
 class PipelineRunner:
@@ -20,6 +24,10 @@ class PipelineRunner:
         self._gate = gate_client
 
     def run(self) -> None:
+        if get_app_setting(self._sb, "pipeline_enabled", "true") == "false":
+            print("[pipeline] paused via dashboard — exiting")
+            return
+
         active_niches = execute_with_retry(
             self._sb.table("niches").select("*, youtube_accounts(channel_id)").eq("status", "testing")
         ).data + execute_with_retry(

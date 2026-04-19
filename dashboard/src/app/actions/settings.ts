@@ -25,3 +25,12 @@ export async function setRenderMethod(formData: FormData): Promise<void> {
     .upsert({ key: 'render_method', value: method }, { onConflict: 'key' })
   revalidatePath('/settings')
 }
+
+export async function setPipelineEnabled(formData: FormData): Promise<void> {
+  const enabled = formData.get('pipeline_enabled') === 'true'
+  const supabase = await createClient()
+  await supabase
+    .from('app_settings')
+    .upsert({ key: 'pipeline_enabled', value: enabled ? 'true' : 'false' }, { onConflict: 'key' })
+  revalidatePath('/settings')
+}

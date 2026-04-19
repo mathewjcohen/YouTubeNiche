@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { saveGateConfig, setRenderMethod } from '@/app/actions/settings'
+import { saveGateConfig, setRenderMethod, setPipelineEnabled } from '@/app/actions/settings'
 import type { GateConfig, Niche } from '@/lib/types'
 
 const GATE_LABELS: Record<number, string> = {
@@ -22,8 +22,9 @@ export default async function SettingsPage() {
     supabase.from('app_settings').select('key, value'),
   ])
 
-  const renderMethod = (appSettings as { key: string; value: string }[] | null)
-    ?.find((s) => s.key === 'render_method')?.value ?? 'github'
+  const settings = appSettings as { key: string; value: string }[] | null
+  const renderMethod = settings?.find((s) => s.key === 'render_method')?.value ?? 'github'
+  const pipelineEnabled = (settings?.find((s) => s.key === 'pipeline_enabled')?.value ?? 'true') === 'true'
 
   const getConfig = (nicheId: string | null, gate: number): boolean => {
     const row = (configs as GateConfig[] | null)?.find(
@@ -44,6 +45,25 @@ export default async function SettingsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
+
+      <div className={`border rounded-lg p-5 mb-6 ${pipelineEnabled ? 'bg-gray-800 border-gray-700' : 'bg-red-950/30 border-red-800/60'}`}>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-semibold text-gray-100">Pipeline</h2>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded ${pipelineEnabled ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+            {pipelineEnabled ? 'Running' : 'Paused'}
+          </span>
+        </div>
+        <p className="text-xs text-gray-500 mb-4">Pausing stops all automated content generation and uploads. Manual workflow_dispatch runs are unaffected.</p>
+        <form action={setPipelineEnabled}>
+          <input type="hidden" name="pipeline_enabled" value={pipelineEnabled ? 'false' : 'true'} />
+          <button
+            type="submit"
+            className={`px-4 py-2 rounded text-sm font-medium ${pipelineEnabled ? 'bg-red-700 hover:bg-red-600 text-white' : 'bg-green-700 hover:bg-green-600 text-white'}`}
+          >
+            {pipelineEnabled ? 'Pause Pipeline' : 'Resume Pipeline'}
+          </button>
+        </form>
+      </div>
 
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 mb-6">
         <h2 className="font-semibold mb-1 text-gray-100">Video Render Method</h2>

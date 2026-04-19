@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { saveGateConfig } from '@/app/actions/settings'
+import { saveGateConfig, setRenderMethod } from '@/app/actions/settings'
 import type { GateConfig, Niche } from '@/lib/types'
 
 const GATE_LABELS: Record<number, string> = {
@@ -16,10 +16,14 @@ const DEFAULT_ON = new Set([1, 3, 5, 6])
 export default async function SettingsPage() {
   const supabase = await createClient()
 
-  const [{ data: niches }, { data: configs }] = await Promise.all([
+  const [{ data: niches }, { data: configs }, { data: appSettings }] = await Promise.all([
     supabase.from('niches').select('id, name').in('status', ['testing', 'promoted']).order('name'),
     supabase.from('gate_config').select('*'),
+    supabase.from('app_settings').select('key, value'),
   ])
+
+  const renderMethod = (appSettings as { key: string; value: string }[] | null)
+    ?.find((s) => s.key === 'render_method')?.value ?? 'github'
 
   const getConfig = (nicheId: string | null, gate: number): boolean => {
     const row = (configs as GateConfig[] | null)?.find(
@@ -40,6 +44,25 @@ export default async function SettingsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
+
+      <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 mb-6">
+        <h2 className="font-semibold mb-1 text-gray-100">Video Render Method</h2>
+        <p className="text-xs text-gray-500 mb-4">GitHub extended timeout runs assembly on a 350-min runner. AWS (Remotion Lambda) offloads rendering to Lambda once configured.</p>
+        <form action={setRenderMethod} className="flex gap-3 items-center">
+          <label className={`flex items-center gap-2 border rounded px-4 py-2 cursor-pointer text-sm ${renderMethod === 'github' ? 'border-orange-500 bg-orange-900/20 text-orange-300' : 'border-gray-700 text-gray-400 hover:border-gray-600'}`}>
+            <input type="radio" name="render_method" value="github" defaultChecked={renderMethod === 'github'} className="accent-orange-500" />
+            GitHub (extended timeout)
+          </label>
+          <label className={`flex items-center gap-2 border rounded px-4 py-2 cursor-pointer text-sm ${renderMethod === 'aws' ? 'border-orange-500 bg-orange-900/20 text-orange-300' : 'border-gray-700 text-gray-400 hover:border-gray-600'}`}>
+            <input type="radio" name="render_method" value="aws" defaultChecked={renderMethod === 'aws'} className="accent-orange-500" />
+            AWS (Remotion Lambda)
+          </label>
+          <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500">
+            Save
+          </button>
+        </form>
+      </div>
+
       <div className="space-y-6">
         {scopes.map((scope) => (
           <div key={scope.id ?? 'global'} className="bg-gray-800 border border-gray-700 rounded-lg p-5">

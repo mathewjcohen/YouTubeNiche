@@ -143,24 +143,27 @@ class VideoAssembler:
             .eq("status", "pending")
         ).data
         for video in videos:
-            scripts_data = video.get("scripts")
-            if not scripts_data:
-                print(f"[assembler] video {video['id']} has no linked script, skip")
-                continue
-            script_text = (
-                scripts_data["long_form_text"]
-                if video["video_type"] == "long"
-                else scripts_data["short_text"]
-            )
-            stem = f"{video['id'][:8]}_{video['video_type']}_assembled"
-            out_path = self.assemble(
-                audio_path=video["audio_path"],
-                srt_path=video["srt_path"],
-                script_text=script_text,
-                output_stem=stem,
-            )
-            execute_with_retry(
-                self._sb.table("videos").update(
-                    {"video_path": out_path, "status": "processing"}
-                ).eq("id", video["id"])
-            )
+            try:
+                scripts_data = video.get("scripts")
+                if not scripts_data:
+                    print(f"[assembler] video {video['id']} has no linked script, skip")
+                    continue
+                script_text = (
+                    scripts_data["long_form_text"]
+                    if video["video_type"] == "long"
+                    else scripts_data["short_text"]
+                )
+                stem = f"{video['id'][:8]}_{video['video_type']}_assembled"
+                out_path = self.assemble(
+                    audio_path=video["audio_path"],
+                    srt_path=video["srt_path"],
+                    script_text=script_text,
+                    output_stem=stem,
+                )
+                execute_with_retry(
+                    self._sb.table("videos").update(
+                        {"video_path": out_path, "status": "processing"}
+                    ).eq("id", video["id"])
+                )
+            except Exception as exc:
+                print(f"[assembler] video {video['id']} failed, will retry next run: {exc}")

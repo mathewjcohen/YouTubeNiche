@@ -1,4 +1,6 @@
 import asyncio
+import re
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Tuple
@@ -8,6 +10,35 @@ from agents.shared.gate_client import GateClient, GateNumber
 from agents.shared.db_retry import execute_with_retry
 
 VOICE = "en-US-AriaNeural"
+
+
+def _clean_for_tts(text: str) -> str:
+    """Strip stage directions, B-roll notes, and production metadata from script text."""
+    # Remove [B-ROLL: ...] and any other bracketed directions (including multi-line)
+    text = re.sub(r'\[.*?\]', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Remove lines that are only hashtags or production keywords
+    lines = text.splitlines()
+    cleaned = []
+    for line in lines:
+        s = line.strip()
+        if not s:
+            cleaned.append(line)
+            continue
+        # Skip hashtag lines
+        if re.match(r'^#\w', s):
+            continue
+        # Skip lines that start with known production keywords
+        if re.match(
+            r'^(b[-\s]?roll|cold open|tight shot|wide shot|cut to|fade|overlay|'
+            r'timestamp|scene|hashtag|vo:|narrator:|on[-\s]?screen)',
+            s, re.IGNORECASE
+        ):
+            continue
+        cleaned.append(line)
+    text = '\n'.join(cleaned)
+    # Collapse excess blank lines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
 
 
 @dataclass
@@ -69,29 +100,38 @@ class VoiceoverAgent:
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
 
-    async def synthesize(self, text: str, output_stem: str) -> Tuple[Path, Path]:
+    async def synthesize(self, text: str, output_stem: str, max_attempts: int = 3) -> Tuple[Path, Path]:
+        text = _clean_for_tts(text)
         audio_path = self._output_dir / f"{output_stem}.mp3"
         srt_path = self._output_dir / f"{output_stem}.srt"
 
-        communicate = edge_tts.Communicate(text=text, voice=VOICE)
-        words: List[WordTimestamp] = []
-
-        with audio_path.open("wb") as audio_file:
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    audio_file.write(chunk["data"])
-                elif chunk["type"] == "WordBoundary":
-                    words.append(
-                        WordTimestamp(
-                            word=chunk["text"],
-                            offset_ms=chunk["offset"] // 10_000,
-                            duration_ms=chunk["duration"] // 10_000,
-                        )
-                    )
-
-        srt_content = build_srt(words)
-        srt_path.write_text(srt_content, encoding="utf-8")
-        return audio_path, srt_path
+        last_exc: Exception = RuntimeError("no attempts made")
+        for attempt in range(1, max_attempts + 1):
+            try:
+                communicate = edge_tts.Communicate(text=text, voice=VOICE)
+                words: List[WordTimestamp] = []
+                with audio_path.open("wb") as audio_file:
+                    async for chunk in communicate.stream():
+                        if chunk["type"] == "audio":
+                            audio_file.write(chunk["data"])
+                        elif chunk["type"] == "WordBoundary":
+                            words.append(
+                                WordTimestamp(
+                                    word=chunk["text"],
+                                    offset_ms=chunk["offset"] // 10_000,
+                                    duration_ms=chunk["duration"] // 10_000,
+                                )
+                            )
+                srt_content = build_srt(words)
+                srt_path.write_text(srt_content, encoding="utf-8")
+                return audio_path, srt_path
+            except Exception as exc:
+                last_exc = exc
+                if attempt < max_attempts:
+                    wait = 2 ** attempt + random.uniform(0, 1)
+                    print(f"[voiceover] synthesis attempt {attempt}/{max_attempts} failed: {exc}; retrying in {wait:.1f}s")
+                    await asyncio.sleep(wait)
+        raise last_exc
 
     def _upload(self, local_path: Path, content_type: str) -> str:
         storage_key = local_path.name
@@ -111,7 +151,11 @@ class VoiceoverAgent:
         for script in scripts:
             for video_type, text in [("long", script["long_form_text"]), ("short", script["short_text"])]:
                 stem = f"{script['id'][:8]}_{video_type}"
-                audio_path, srt_path = asyncio.run(self.synthesize(text, stem))
+                try:
+                    audio_path, srt_path = asyncio.run(self.synthesize(text, stem))
+                except Exception as exc:
+                    print(f"[voiceover] synthesis failed for {stem} after retries: {exc}; skipping")
+                    continue
                 audio_url = self._upload(audio_path, "audio/mpeg")
                 srt_url = self._upload(srt_path, "text/plain")
 

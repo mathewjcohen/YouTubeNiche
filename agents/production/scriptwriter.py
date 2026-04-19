@@ -18,9 +18,13 @@ Write a complete video script (~1,800 words, ~12 minutes) in this structure:
 - Lesson (2 min): what the viewer can learn or action they can take
 - CTA (30 sec): "If this happened to you..." + subscribe line
 
-Include scene direction tags like [B-ROLL: person reading documents] throughout.
+CRITICAL: Output ONLY the words the narrator speaks aloud. Do NOT include:
+- Scene directions, camera notes, or B-roll descriptions
+- Stage directions in brackets, parentheses, or plain text
+- Section headers or timestamps
+- Production notes of any kind
 Write conversationally, as if telling a friend. No jargon. No filler.
-Do NOT include a title or headers in the output — just the spoken script text."""
+Do NOT include a title or headers — just the spoken narration."""
 
 SHORT_FORM_PROMPT = """You are writing a YouTube Short script (60 seconds, ~200 words) based on this longer script.
 
@@ -32,7 +36,8 @@ The Short should:
 Full script for reference:
 {long_form}
 
-Write only the spoken Short script. No headers."""
+CRITICAL: Output ONLY the words the narrator speaks aloud. Do NOT include hashtags, scene
+directions, camera notes, labels, headers, or any production metadata. Just the spoken words."""
 
 METADATA_PROMPT = """Generate YouTube metadata for this video script.
 

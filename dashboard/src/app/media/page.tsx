@@ -17,7 +17,8 @@ type ScriptGroup = {
   scriptId: string
   title: string | null
   nicheName: string
-  thumbnail: string | null | undefined
+  longThumbnail: string | null | undefined
+  shortThumbnail: string | null | undefined
   showGate5: boolean
   videos: VideoRow[]
 }
@@ -32,7 +33,8 @@ function groupByScript(videos: VideoRow[]): ScriptGroup[] {
     scriptId: group[0].script_id,
     title: group[0].scripts?.youtube_title ?? null,
     nicheName: group[0].niches?.name ?? '',
-    thumbnail: group.find((v) => v.thumbnail_path?.startsWith('http'))?.thumbnail_path,
+    longThumbnail: group.find((v) => v.video_type === 'long' && v.thumbnail_path?.startsWith('http'))?.thumbnail_path,
+    shortThumbnail: group.find((v) => v.video_type === 'short' && v.thumbnail_path?.startsWith('http'))?.thumbnail_path,
     showGate5: group.some((v) => v.gate5_state === 'awaiting_review'),
     videos: group,
   }))
@@ -72,10 +74,10 @@ function ScriptGroupCard({ group }: { group: ScriptGroup }) {
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-5">
       <div className="flex gap-5">
         <div className="w-40 h-24 bg-gray-700 rounded overflow-hidden shrink-0 flex items-center justify-center">
-          {group.thumbnail ? (
-            <a href={group.thumbnail} target="_blank" rel="noreferrer" className="w-full h-full block">
+          {group.longThumbnail ? (
+            <a href={group.longThumbnail} target="_blank" rel="noreferrer" className="w-full h-full block">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={group.thumbnail} alt="thumbnail" className="object-cover w-full h-full hover:opacity-80 transition-opacity" />
+              <img src={group.longThumbnail} alt="thumbnail" className="object-cover w-full h-full hover:opacity-80 transition-opacity" />
             </a>
           ) : (
             <span className="text-xs text-gray-500">No preview</span>
@@ -90,6 +92,29 @@ function ScriptGroupCard({ group }: { group: ScriptGroup }) {
           {group.showGate5 && (
             <div className="border border-orange-700/50 rounded p-3 bg-orange-900/20 mb-3">
               <p className="text-xs font-semibold text-orange-400 mb-2">Gate 5 — Thumbnail</p>
+              <div className="flex gap-3 mb-3">
+                {group.longThumbnail && (
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">Long</span>
+                    <a href={group.longThumbnail} target="_blank" rel="noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={group.longThumbnail} alt="long thumbnail" className="w-32 rounded hover:opacity-80 transition-opacity" />
+                    </a>
+                  </div>
+                )}
+                {group.shortThumbnail && (
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">Short</span>
+                    <a href={group.shortThumbnail} target="_blank" rel="noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={group.shortThumbnail} alt="short thumbnail" className="h-24 rounded hover:opacity-80 transition-opacity" />
+                    </a>
+                  </div>
+                )}
+                {!group.longThumbnail && !group.shortThumbnail && (
+                  <p className="text-xs text-gray-500">Thumbnails not yet generated</p>
+                )}
+              </div>
               <div className="flex gap-2 flex-wrap">
                 <form action={approveGate5ForScript.bind(null, group.scriptId)}>
                   <button className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700">

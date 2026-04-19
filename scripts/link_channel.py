@@ -38,7 +38,7 @@ def run_oauth() -> Credentials:
     return flow.run_local_server(port=0)
 
 
-def fetch_channel_info(creds: Credentials) -> tuple[str, str]:
+def fetch_channel_info(creds: Credentials) -> tuple[str, str, str]:
     yt = build("youtube", "v3", credentials=creds)
     resp = yt.channels().list(part="snippet", mine=True).execute()
     items = resp.get("items", [])
@@ -46,8 +46,10 @@ def fetch_channel_info(creds: Credentials) -> tuple[str, str]:
         raise RuntimeError("No channel found for this account. Create a Brand Account first.")
     channel = items[0]
     channel_id = channel["id"]
-    handle = channel["snippet"].get("customUrl", "")
-    return channel_id, handle
+    snippet = channel["snippet"]
+    handle = snippet.get("customUrl", "")
+    title = snippet.get("title", "")
+    return channel_id, handle, title
 
 
 def main() -> None:
@@ -71,7 +73,7 @@ def main() -> None:
     print("Opening browser for YouTube OAuth...\n")
 
     creds = run_oauth()
-    channel_id, handle = fetch_channel_info(creds)
+    channel_id, handle, channel_title = fetch_channel_info(creds)
 
     token_dict = json.loads(creds.to_json())
 
@@ -81,7 +83,7 @@ def main() -> None:
         .upsert(
             {
                 "channel_id": channel_id,
-                "channel_name": args.niche,
+                "channel_name": channel_title,
                 "handle": handle,
                 "token_json": token_dict,
             },
@@ -98,10 +100,11 @@ def main() -> None:
     }).eq("id", niche["id"]).execute()
 
     print(f"[ok] Channel linked!")
-    print(f"     Channel ID : {channel_id}")
-    print(f"     Handle     : {handle}")
-    print(f"     Account ID : {account_id}")
-    print(f"     Niche      : {niche['name']}")
+    print(f"     Channel Name : {channel_title}")
+    print(f"     Channel ID   : {channel_id}")
+    print(f"     Handle       : {handle}")
+    print(f"     Account ID   : {account_id}")
+    print(f"     Niche        : {niche['name']}")
 
 
 if __name__ == "__main__":

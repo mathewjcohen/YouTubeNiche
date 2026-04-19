@@ -51,6 +51,10 @@ class PipelineRunner:
                 self._sb.table("scripts").select("id")
                 .eq("niche_id", niche_id).eq("gate3_state", "approved").eq("status", "pending")
             ).data
+            # Voiceover runs first so video rows exist before thumbnail_gen looks for them
+            if approved_scripts:
+                self._run_voiceover(niche)
+            # Re-query after voiceover may have created new rows
             missing_thumbs = execute_with_retry(
                 self._sb.table("videos").select("id")
                 .eq("niche_id", niche_id).eq("gate5_state", "awaiting_review")
@@ -58,8 +62,6 @@ class PipelineRunner:
             ).data
             if approved_scripts or missing_thumbs:
                 self._run_thumbnail_gen(niche)
-            if approved_scripts:
-                self._run_voiceover(niche)
 
         if STAGES in ("slow", "all"):
             gate4_approved = execute_with_retry(

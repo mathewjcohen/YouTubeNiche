@@ -46,17 +46,31 @@ function groupByScript(videos: VideoRow[]): ScriptGroup[] {
 
 export default async function MediaPage() {
   const supabase = await createClient()
-  const { data: videos } = await supabase
+
+  // Find which scripts have at least one video needing review
+  const { data: needsReview } = await supabase
     .from('videos')
-    .select('*, scripts(youtube_title, long_form_text), niches(name)')
+    .select('script_id')
     .or(
       'gate4_state.in.(awaiting_review,rejected),' +
       'gate5_state.in.(awaiting_review,rejected),' +
       'gate6_state.in.(awaiting_review,rejected)'
     )
-    .order('created_at')
 
-  const rows = (videos ?? []) as VideoRow[]
+  const scriptIds = [...new Set((needsReview ?? []).map((v) => v.script_id))]
+
+  // Fetch ALL video rows for those scripts so groups are always complete
+  // (e.g. thumbnail_path lives on the long row even when only the short needs review)
+  const rows: VideoRow[] = []
+  if (scriptIds.length > 0) {
+    const { data: videos } = await supabase
+      .from('videos')
+      .select('*, scripts(youtube_title, long_form_text), niches(name)')
+      .in('script_id', scriptIds)
+      .order('created_at')
+    rows.push(...((videos ?? []) as VideoRow[]))
+  }
+
   const groups = groupByScript(rows)
 
   return (

@@ -27,9 +27,21 @@ type ScriptGroup = {
   videos: VideoRow[]
 }
 
-function groupByScript(videos: VideoRow[]): ScriptGroup[] {
-  const map = new Map<string, VideoRow[]>()
+function deduplicateVideos(videos: VideoRow[]): VideoRow[] {
+  // Keep only the newest row per (script_id, video_type) — guards against agent double-runs
+  const seen = new Map<string, VideoRow>()
   for (const v of videos) {
+    const key = `${v.script_id}:${v.video_type}`
+    const prev = seen.get(key)
+    if (!prev || v.created_at > prev.created_at) seen.set(key, v)
+  }
+  return Array.from(seen.values())
+}
+
+function groupByScript(videos: VideoRow[]): ScriptGroup[] {
+  const deduped = deduplicateVideos(videos)
+  const map = new Map<string, VideoRow[]>()
+  for (const v of deduped) {
     const existing = map.get(v.script_id) ?? []
     map.set(v.script_id, [...existing, v])
   }

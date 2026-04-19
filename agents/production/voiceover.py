@@ -290,8 +290,23 @@ class VoiceoverAgent:
             .eq("status", "pending")
         ).data
         for script in scripts:
+            # Mark processing immediately so a concurrent/restarted agent run won't duplicate
+            execute_with_retry(
+                self._sb.table("scripts").update({"status": "processing"}).eq("id", script["id"])
+            )
             for video_type, text in [("long", script["long_form_text"]), ("short", script["short_text"])]:
                 stem = f"{script['id'][:8]}_{video_type}"
+                # Skip if a video row already exists (idempotency guard)
+                existing = execute_with_retry(
+                    self._sb.table("videos")
+                    .select("id")
+                    .eq("script_id", script["id"])
+                    .eq("video_type", video_type)
+                    .limit(1)
+                ).data
+                if existing:
+                    print(f"[voiceover] video row already exists for {stem}, skipping")
+                    continue
                 try:
                     audio_path, srt_path = asyncio.run(self.synthesize(text, stem, category=category))
                 except Exception as exc:
@@ -327,6 +342,3 @@ class VoiceoverAgent:
                     auto_state="approved",
                     review_state="awaiting_review",
                 )
-            execute_with_retry(
-                self._sb.table("scripts").update({"status": "processing"}).eq("id", script["id"])
-            )

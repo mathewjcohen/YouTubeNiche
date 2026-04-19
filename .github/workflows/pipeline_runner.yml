@@ -61,4 +61,9 @@ jobs:
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           YOUTUBE_TOKEN_PATH: config/youtube_token.json
           PIPELINE_STAGES: slow
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          REMOTION_REGION: ${{ secrets.REMOTION_REGION }}
+          REMOTION_FUNCTION_NAME: ${{ secrets.REMOTION_FUNCTION_NAME }}
+          REMOTION_SERVE_URL: ${{ secrets.REMOTION_SERVE_URL }}
         run: python -m agents.shared.pipeline_runner

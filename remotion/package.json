@@ -1,0 +1,23 @@
+{
+  "name": "youtube-niche-remotion",
+  "version": "1.0.0",
+  "description": "Remotion Lambda composition for YouTube video assembly",
+  "scripts": {
+    "deploy:fn": "npx remotion lambda functions deploy --memory=3009 --disk=10240 --timeout=900",
+    "deploy:site": "npx remotion lambda sites create --site-name=youtube-niche",
+    "deploy": "npm run deploy:fn && npm run deploy:site",
+    "studio": "npx remotion studio"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.290",
+    "@remotion/lambda": "4.0.290",
+    "remotion": "4.0.290",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "typescript": "^5.4.0"
+  }
+}

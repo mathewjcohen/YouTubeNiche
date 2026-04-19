@@ -45,7 +45,7 @@ jobs:
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           YOUTUBE_TOKEN_PATH: config/youtube_token.json
           PIPELINE_STAGES: fast
-        run: python -m agents.shared.pipeline_runner
+        run: python -u -m agents.shared.pipeline_runner
 
   assemble:
     name: Video assembly (slow — extended timeout)
@@ -78,4 +78,4 @@ jobs:
           REMOTION_REGION: ${{ secrets.REMOTION_REGION }}
           REMOTION_FUNCTION_NAME: ${{ secrets.REMOTION_FUNCTION_NAME }}
           REMOTION_SERVE_URL: ${{ secrets.REMOTION_SERVE_URL }}
-        run: python -m agents.shared.pipeline_runner
+        run: python -u -m agents.shared.pipeline_runner

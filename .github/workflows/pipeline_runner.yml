@@ -4,6 +4,16 @@ on:
   schedule:
     - cron: "0 * * * *"  # Every hour
   workflow_dispatch:
+    inputs:
+      jobs:
+        description: "Which jobs to run"
+        required: false
+        default: "both"
+        type: choice
+        options:
+          - both
+          - fast
+          - slow
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -11,6 +21,7 @@ env:
 jobs:
   fast:
     name: Fast stages (topics → scripts → voiceover → thumbnails)
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.jobs != 'slow' }}
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
@@ -38,6 +49,7 @@ jobs:
 
   assemble:
     name: Video assembly (slow — extended timeout)
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.jobs != 'fast' }}
     runs-on: ubuntu-latest
     timeout-minutes: 350
     steps:

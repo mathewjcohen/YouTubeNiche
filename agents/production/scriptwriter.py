@@ -18,13 +18,9 @@ Write a complete video script (~1,800 words, ~12 minutes) in this structure:
 - Lesson (2 min): what the viewer can learn or action they can take
 - CTA (30 sec): "If this happened to you..." + subscribe line
 
-CRITICAL: Output ONLY the words the narrator speaks aloud. Do NOT include:
-- Scene directions, camera notes, or B-roll descriptions
-- Stage directions in brackets, parentheses, or plain text
-- Section headers or timestamps
-- Production notes of any kind
-Write conversationally, as if telling a friend. No jargon. No filler.
-Do NOT include a title or headers — just the spoken narration."""
+CRITICAL: Output ONLY the spoken narration — nothing else. No title. No section headers. No timestamps.
+No brackets. No stage directions. No camera notes. No production metadata of any kind.
+Your response begins with the first spoken word of the narration and ends with the last."""
 
 SHORT_FORM_PROMPT = """You are writing a YouTube Short script (60 seconds, ~200 words) based on this longer script.
 
@@ -36,8 +32,9 @@ The Short should:
 Full script for reference:
 {long_form}
 
-CRITICAL: Output ONLY the words the narrator speaks aloud. Do NOT include hashtags, scene
-directions, camera notes, labels, headers, or any production metadata. Just the spoken words."""
+CRITICAL: Output ONLY the spoken narration — nothing else. No title. No label. No duration. No headers.
+No "YouTube Short", no "60 seconds", no "Script:", no brackets, no production notes of any kind.
+Your response begins with the first spoken word of the narration and ends with the last."""
 
 METADATA_PROMPT = """Generate YouTube metadata for this video script.
 

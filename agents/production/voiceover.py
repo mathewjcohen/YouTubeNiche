@@ -75,6 +75,8 @@ def _clean_for_tts(text: str) -> str:
     """Strip stage directions, B-roll notes, and production metadata from script text."""
     # Remove [B-ROLL: ...] and any other bracketed directions (including multi-line)
     text = re.sub(r'\[.*?\]', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Strip markdown bold/italic markers
+    text = re.sub(r'\*{1,3}(.*?)\*{1,3}', r'\1', text)
     # Remove lines that are only hashtags or production keywords
     lines = text.splitlines()
     cleaned = []
@@ -83,13 +85,27 @@ def _clean_for_tts(text: str) -> str:
         if not s:
             cleaned.append(line)
             continue
+        # Skip markdown horizontal rules
+        if re.match(r'^[-*_]{3,}$', s):
+            continue
         # Skip hashtag lines
         if re.match(r'^#\w', s):
             continue
+        # Skip lines that are just a label/header (no sentence-ending punctuation, short, title-case or all-caps)
+        if re.match(r'^[A-Z][A-Za-z\s\-:()~\d]+$', s) and len(s) < 60 and not re.search(r'[.!?,]', s):
+            # Allow if it looks like a real sentence opener (starts a paragraph)
+            if re.match(
+                r'^(youtube|short|long|script|narrator|duration|length|section|hook|'
+                r'context|story|lesson|cta|intro|outro|cold\s?open|part\s?\d)',
+                s, re.IGNORECASE
+            ):
+                continue
         # Skip lines that start with known production keywords
         if re.match(
-            r'^(b[-\s]?roll|cold open|tight shot|wide shot|cut to|fade|overlay|'
-            r'timestamp|scene|hashtag|vo:|narrator:|on[-\s]?screen)',
+            r'^(b[-\s]?roll|cold\s?open|tight shot|wide shot|cut to|fade|overlay|'
+            r'timestamp|scene|hashtag|vo:|narrator:|on[-\s]?screen|'
+            r'youtube\s?(short|long|clip)|short\s?(form|script|clip)|long\s?(form|script)|'
+            r'duration:|length:|~?\d+\s?seconds?|~?\d+\s?words?|~?\d+\s?min)',
             s, re.IGNORECASE
         ):
             continue

@@ -58,9 +58,12 @@ def main() -> None:
     sb = create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY"))
 
     # Resolve niche
-    result = sb.table("niches").select("id, name, channel_state").eq("name", args.niche).limit(1).execute()
+    result = sb.table("niches").select("id, name, channel_state").ilike("name", args.niche).limit(1).execute()
     if not result.data:
-        print(f"[error] No niche found with name '{args.niche}'")
+        all_niches = sb.table("niches").select("name, status").order("name").execute()
+        names = [f"  {r['name']} ({r['status']})" for r in all_niches.data]
+        print(f"[error] No niche found matching '{args.niche}'. Available niches:")
+        print("\n".join(names))
         sys.exit(1)
     niche = result.data[0]
 

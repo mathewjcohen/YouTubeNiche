@@ -113,7 +113,17 @@ def _clean_for_tts(text: str) -> str:
     text = '\n'.join(cleaned)
     # Collapse excess blank lines
     text = re.sub(r'\n{3,}', '\n\n', text)
-    return text.strip()
+    text = text.strip()
+    # Final pass: strip any leading lines that are still production labels
+    # (catches edge cases like "#YouTube Shorts" or "YouTube Short 🎬" that slipped through)
+    leading_lines = text.splitlines()
+    while leading_lines:
+        first = leading_lines[0].strip()
+        if re.match(r'^[#\s]*(youtube|short\s?form|long\s?form|short\s?script|long\s?script)', first, re.IGNORECASE):
+            leading_lines.pop(0)
+        else:
+            break
+    return '\n'.join(leading_lines).strip()
 
 
 def _mix_music(audio_path: Path, music_path: Path) -> None:

@@ -72,16 +72,23 @@ export async function retryThumbnailForScript(scriptId: string): Promise<void> {
   revalidatePath('/media')
 }
 
-export async function retryVoiceover(scriptId: string): Promise<void> {
+export async function retryVoiceover(videoId: string): Promise<void> {
   const supabase = await createClient()
-  // Delete all video rows — voiceover agent will recreate them on next run
-  const { error: delError } = await supabase.from('videos').delete().eq('script_id', scriptId)
+  // Look up which script this video belongs to
+  const { data: video, error: fetchErr } = await supabase
+    .from('videos')
+    .select('script_id')
+    .eq('id', videoId)
+    .single()
+  if (fetchErr || !video) throw new Error(fetchErr?.message ?? 'Video not found')
+  // Delete just this video row — the agent's idempotency guard will skip the sibling
+  const { error: delError } = await supabase.from('videos').delete().eq('id', videoId)
   if (delError) throw new Error(delError.message)
   // Reset script so the voiceover stage picks it up again
   const { error: updError } = await supabase
     .from('scripts')
     .update({ status: 'pending' })
-    .eq('id', scriptId)
+    .eq('id', video.script_id)
   if (updError) throw new Error(updError.message)
   revalidatePath('/media')
 }

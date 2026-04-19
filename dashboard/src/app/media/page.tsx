@@ -254,7 +254,7 @@ function ScriptGroupCard({ group }: { group: ScriptGroup }) {
                             </>
                           )}
                           {gate === 4 ? (
-                            <form action={retryVoiceover.bind(null, v.script_id)}>
+                            <form action={retryVoiceover.bind(null, v.id)}>
                               <button className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
                                 Retry Voiceover
                               </button>

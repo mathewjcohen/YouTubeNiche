@@ -56,12 +56,29 @@ class ThumbnailGenerator:
         )
 
         # Title text — wrap at ~22 chars per line for large font
-        try:
-            font_large = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 90)
-            font_small = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial.ttf", 42)
-        except OSError:
-            font_large = ImageFont.load_default()
-            font_small = ImageFont.load_default()
+        _BOLD_CANDIDATES = [
+            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",          # macOS
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",       # Ubuntu
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+        ]
+        _REGULAR_CANDIDATES = [
+            "/System/Library/Fonts/Supplemental/Arial.ttf",               # macOS
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",            # Ubuntu
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        ]
+
+        def _load_font(candidates: list, size: int):
+            for path in candidates:
+                try:
+                    return ImageFont.truetype(path, size)
+                except OSError:
+                    continue
+            return ImageFont.load_default()
+
+        font_large = _load_font(_BOLD_CANDIDATES, 90)
+        font_small = _load_font(_REGULAR_CANDIDATES, 42)
 
         wrapped = textwrap.wrap(title, width=22)
         line_height = 110

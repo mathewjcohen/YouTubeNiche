@@ -50,8 +50,10 @@ function MediaCard({ video }: {
       <div className="flex gap-5">
         <div className="w-40 h-24 bg-gray-700 rounded overflow-hidden shrink-0 flex items-center justify-center">
           {video.thumbnail_path?.startsWith('http') ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={video.thumbnail_path} alt="thumbnail" className="object-cover w-full h-full" />
+            <a href={video.thumbnail_path} target="_blank" rel="noreferrer" className="w-full h-full block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={video.thumbnail_path} alt="thumbnail" className="object-cover w-full h-full hover:opacity-80 transition-opacity" />
+            </a>
           ) : (
             <span className="text-xs text-gray-500">No preview</span>
           )}

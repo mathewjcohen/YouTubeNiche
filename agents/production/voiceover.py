@@ -96,7 +96,7 @@ class VoiceoverAgent:
     def _upload(self, local_path: Path, content_type: str) -> str:
         storage_key = local_path.name
         self._sb.storage.from_("voiceovers").upload(
-            storage_key, local_path.read_bytes(), {"content-type": content_type}
+            storage_key, local_path.read_bytes(), {"content-type": content_type, "upsert": "true"}
         )
         return self._sb.storage.from_("voiceovers").get_public_url(storage_key)
 

@@ -94,7 +94,9 @@ class ThumbnailGenerator:
 
     def _upload(self, local_path: Path) -> str:
         self._sb.storage.from_("thumbnails").upload(
-            local_path.name, local_path.read_bytes(), {"content-type": "image/jpeg"}
+            local_path.name,
+            local_path.read_bytes(),
+            {"content-type": "image/jpeg", "upsert": "true"},
         )
         return self._sb.storage.from_("thumbnails").get_public_url(local_path.name)
 

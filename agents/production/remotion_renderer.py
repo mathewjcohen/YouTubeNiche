@@ -50,7 +50,7 @@ def _download_and_upload_broll(
     data = resp.content
     try:
         supabase.storage.from_("broll").upload(
-            storage_key, data, {"content-type": "video/mp4"}
+            storage_key, data, {"content-type": "video/mp4", "upsert": "true"}
         )
     except Exception:
         pass  # file may already exist from a previous run

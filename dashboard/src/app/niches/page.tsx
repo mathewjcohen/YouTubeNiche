@@ -87,6 +87,11 @@ function NicheRow({ niche }: { niche: Niche }) {
         <p className="font-medium text-gray-100">{niche.name}</p>
         <p className="text-xs text-gray-500">{niche.category}{niche.niche_source === 'manual' ? ' · [manual]' : ''}</p>
       </div>
+      {niche.channel_state === 'linked' ? (
+        <span className="text-xs text-green-400 border border-green-800 rounded px-2 py-0.5">Channel linked</span>
+      ) : niche.status === 'promoted' ? (
+        <span className="text-xs text-orange-400 border border-orange-800 rounded px-2 py-0.5">No channel</span>
+      ) : null}
       {niche.score != null && (
         <span className="text-sm text-gray-400">Score: {niche.score.toFixed(2)}</span>
       )}

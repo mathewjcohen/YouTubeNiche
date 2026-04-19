@@ -16,6 +16,8 @@ export interface BrandPackage {
   tone: string
 }
 
+export type ChannelState = 'unconfigured' | 'linked'
+
 export interface Niche {
   id: string
   name: string
@@ -27,6 +29,8 @@ export interface Niche {
   brand_package: BrandPackage | null
   activated_at: string | null
   created_at: string
+  channel_state: ChannelState
+  youtube_account_id: string | null
 }
 
 export interface Topic {

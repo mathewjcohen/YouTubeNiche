@@ -1,7 +1,8 @@
+import json
 import os
 import tempfile
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Optional
 
 import requests as http_requests
 from googleapiclient.discovery import build
@@ -14,14 +15,27 @@ from supabase import Client
 from agents.shared.gate_client import GateClient
 from agents.shared.db_retry import execute_with_retry
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.readonly",
+]
 
 
-def build_youtube_service():
+def build_youtube_service(token_dict: Optional[Dict] = None):
+    """Build YouTube API service.
+
+    If token_dict is provided (from Supabase), use it directly.
+    Otherwise fall back to token file / CI env var.
+    """
+    if token_dict:
+        creds = Credentials.from_authorized_user_info(token_dict, SCOPES)
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        return build("youtube", "v3", credentials=creds)
+
     token_path = Path(os.getenv("YOUTUBE_TOKEN_PATH", "config/youtube_token.json"))
     secrets_path = Path(os.getenv("YOUTUBE_CLIENT_SECRETS_PATH", "config/youtube_oauth_secrets.json"))
 
-    # In CI: token JSON is provided via env var
     token_json_env = os.getenv("YOUTUBE_TOKEN_JSON")
     if token_json_env and not token_path.exists():
         token_path.parent.mkdir(parents=True, exist_ok=True)
@@ -35,7 +49,6 @@ def build_youtube_service():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # Interactive flow — only works locally
             flow = InstalledAppFlow.from_client_secrets_file(str(secrets_path), SCOPES)
             creds = flow.run_local_server(port=0)
         token_path.write_text(creds.to_json())
@@ -47,7 +60,7 @@ class YouTubeUploader:
     def __init__(self, supabase: Client, gate_client: GateClient):
         self._sb = supabase
         self._gate = gate_client
-        self._yt = build_youtube_service()
+        self._yt: Optional[object] = None  # built lazily per niche
 
     def _fetch_to_tempfile(self, url: str, suffix: str) -> Path:
         resp = http_requests.get(url, timeout=300)
@@ -101,7 +114,41 @@ class YouTubeUploader:
 
         return video_id
 
+    def _build_service_for_niche(self, niche_id: str) -> bool:
+        """Load per-niche token from Supabase. Returns False if no channel linked."""
+        niche_rows = execute_with_retry(
+            self._sb.table("niches")
+            .select("youtube_account_id, channel_state")
+            .eq("id", niche_id)
+            .limit(1)
+        ).data
+        if not niche_rows or niche_rows[0].get("channel_state") != "linked":
+            return False
+        account_id = niche_rows[0]["youtube_account_id"]
+        account_rows = execute_with_retry(
+            self._sb.table("youtube_accounts")
+            .select("token_json, channel_id")
+            .eq("id", account_id)
+            .limit(1)
+        ).data
+        if not account_rows:
+            return False
+        token_dict = account_rows[0]["token_json"]
+        self._yt = build_youtube_service(token_dict=token_dict)
+        # Persist refreshed token back to Supabase
+        creds = Credentials.from_authorized_user_info(token_dict, SCOPES)
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            self._sb.table("youtube_accounts").update(
+                {"token_json": json.loads(creds.to_json())}
+            ).eq("id", account_id).execute()
+        return True
+
     def process_approved_videos(self, niche_id: str) -> None:
+        if not self._build_service_for_niche(niche_id):
+            print(f"[uploader] niche {niche_id} has no linked YouTube channel — skipping upload")
+            return
+
         videos = execute_with_retry(
             self._sb.table("videos")
             .select("*, scripts(youtube_title, youtube_description, youtube_tags)")

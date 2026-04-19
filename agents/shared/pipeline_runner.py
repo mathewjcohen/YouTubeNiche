@@ -21,9 +21,9 @@ class PipelineRunner:
 
     def run(self) -> None:
         active_niches = execute_with_retry(
-            self._sb.table("niches").select("*").eq("status", "testing")
+            self._sb.table("niches").select("*, youtube_accounts(channel_id)").eq("status", "testing")
         ).data + execute_with_retry(
-            self._sb.table("niches").select("*").eq("status", "promoted")
+            self._sb.table("niches").select("*, youtube_accounts(channel_id)").eq("status", "promoted")
         ).data
         for niche in active_niches:
             self._process_niche(niche)
@@ -68,7 +68,10 @@ class PipelineRunner:
                 .eq("gate6_state", "approved").eq("status", "approved")
             ).data
             if upload_ready:
-                self._run_uploader(niche)
+                if niche.get("channel_state") != "linked":
+                    print(f"[pipeline] niche '{niche['name']}' has no linked YouTube channel — skipping upload")
+                else:
+                    self._run_uploader(niche)
 
     def _run_thumbnail_gen(self, niche: dict) -> None:
         from agents.production.thumbnail_gen import ThumbnailGenerator

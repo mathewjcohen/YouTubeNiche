@@ -76,7 +76,7 @@ class RemotionRenderer:
         self._gate = gate_client
 
     def render(self, audio_url: str, script_text: str, output_stem: str) -> str:
-        from remotion_lambda import RemotionClient, RenderMediaOnLambdaParams, GetRenderProgressParams
+        from remotion_lambda import RemotionClient, RenderMediaParams
 
         pexels_key = get_env("PEXELS_API_KEY")
         pexels_headers = {"Authorization": pexels_key}
@@ -117,7 +117,7 @@ class RemotionRenderer:
         )
 
         render_response = client.render_media_on_lambda(
-            params=RenderMediaOnLambdaParams(
+            render_params=RenderMediaParams(
                 composition="VideoComposition",
                 input_props={
                     "audioUrl": audio_url,
@@ -135,23 +135,22 @@ class RemotionRenderer:
         deadline = time.time() + RENDER_TIMEOUT
         while time.time() < deadline:
             progress = client.get_render_progress(
-                params=GetRenderProgressParams(
-                    render_id=render_response.render_id,
-                    bucket_name=render_response.bucket_name,
-                )
+                render_id=render_response.render_id,
+                bucket_name=render_response.bucket_name,
+                log_level="info",
             )
-            if getattr(progress, "fatal_error_encountered", False):
-                raise RuntimeError(f"Remotion render failed: {getattr(progress, 'errors', 'unknown error')}")
-            if getattr(progress, "done", False):
+            if progress.fatalErrorEncountered:
+                raise RuntimeError(f"Remotion render failed: {progress.errors}")
+            if progress.done:
                 break
-            pct = int(getattr(progress, "overall_progress", 0) * 100)
+            pct = int(progress.overallProgress * 100)
             print(f"[remotion] render {render_response.render_id} — {pct}%")
             time.sleep(POLL_INTERVAL)
         else:
             raise TimeoutError(f"Remotion render timed out after {RENDER_TIMEOUT}s")
 
         # 5. Download output and store in Supabase videos bucket
-        output_url = progress.output_file
+        output_url = progress.outputFile
         print(f"[remotion] render complete → {output_url}")
         out_resp = requests.get(output_url, timeout=300)
         out_resp.raise_for_status()

@@ -43,8 +43,14 @@ class PipelineRunner:
                 self._sb.table("scripts").select("id")
                 .eq("niche_id", niche_id).eq("gate3_state", "approved").eq("status", "pending")
             ).data
-            if approved_scripts:
+            missing_thumbs = execute_with_retry(
+                self._sb.table("videos").select("id")
+                .eq("niche_id", niche_id).eq("gate5_state", "awaiting_review")
+                .is_("thumbnail_path", "null")
+            ).data
+            if approved_scripts or missing_thumbs:
                 self._run_thumbnail_gen(niche)
+            if approved_scripts:
                 self._run_voiceover(niche)
 
         if STAGES in ("slow", "all"):

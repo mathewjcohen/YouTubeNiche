@@ -175,9 +175,13 @@ function ScriptGroupCard({ group }: { group: ScriptGroup }) {
 
           {/* Gates 4 and 6 — per video format */}
           {group.videos.map((v) => {
-            const activeGates = ([4, 6] as const).filter(
-              (g) => v[`gate${g}_state`] === 'awaiting_review' || v[`gate${g}_state`] === 'rejected'
-            )
+            const activeGates = ([4, 6] as const).filter((g) => {
+              const state = v[`gate${g}_state`]
+              if (state !== 'awaiting_review' && state !== 'rejected') return false
+              // Gate 6 only shown when gate 4 and gate 5 are both approved
+              if (g === 6 && (v.gate4_state !== 'approved' || v.gate5_state !== 'approved')) return false
+              return true
+            })
             if (!activeGates.length) return null
             return (
               <div key={v.id} className="mb-3">

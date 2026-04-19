@@ -310,6 +310,7 @@ class VoiceoverAgent:
                             "srt_path": srt_url,
                             "status": "pending",
                             "gate4_state": "pending",
+                            "gate6_state": "pending",
                         }
                     )
                 )

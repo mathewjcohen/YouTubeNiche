@@ -9,9 +9,9 @@
     "studio": "npx remotion studio"
   },
   "dependencies": {
-    "@remotion/cli": "4.0.290",
-    "@remotion/lambda": "4.0.290",
-    "remotion": "4.0.290",
+    "@remotion/cli": "4.0.448",
+    "@remotion/lambda": "4.0.448",
+    "remotion": "4.0.448",
     "react": "18.2.0",
     "react-dom": "18.2.0"
   },

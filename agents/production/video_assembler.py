@@ -2,13 +2,14 @@ import re
 import tempfile
 import urllib.request
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Optional
 
 import PIL.Image
 if not hasattr(PIL.Image, "ANTIALIAS"):
     PIL.Image.ANTIALIAS = PIL.Image.LANCZOS  # removed in Pillow 10, moviepy 1.x needs it
 
 import requests
+from tusclient import client as tus_client
 from moviepy.editor import (
     VideoFileClip, AudioFileClip, concatenate_videoclips,
     CompositeVideoClip, ColorClip
@@ -62,6 +63,8 @@ class VideoAssembler:
     TARGET_HEIGHT = 1080
     FPS = 24
 
+    TUS_CHUNK_SIZE = 6 * 1024 * 1024  # 6 MB — Supabase recommended chunk size
+
     def __init__(
         self,
         supabase: Client,
@@ -70,10 +73,34 @@ class VideoAssembler:
         output_dir: str = "output/video",
     ):
         self._sb = supabase
+        self._supabase_url: str = supabase.supabase_url.rstrip("/")
+        self._supabase_key: str = supabase.supabase_key
         self._gate = gate_client
         self._pexels = pexels_client
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
+
+    def _upload_video(self, file_path: Path, object_name: str) -> str:
+        """Upload a video to Supabase Storage via TUS resumable upload."""
+        tus_url = f"{self._supabase_url}/storage/v1/upload/resumable"
+        headers = {
+            "Authorization": f"Bearer {self._supabase_key}",
+            "x-upsert": "true",
+        }
+        metadata = {
+            "bucketName": "videos",
+            "objectName": object_name,
+            "contentType": "video/mp4",
+            "cacheControl": "3600",
+        }
+        tc = tus_client.TusClient(tus_url, headers=headers)
+        uploader = tc.uploader(
+            file_path=str(file_path),
+            chunk_size=self.TUS_CHUNK_SIZE,
+            metadata=metadata,
+        )
+        uploader.upload()
+        return f"{self._supabase_url}/storage/v1/object/public/videos/{object_name}"
 
     def assemble(
         self,
@@ -129,10 +156,7 @@ class VideoAssembler:
                 logger=None,
             )
 
-        self._sb.storage.from_("videos").upload(
-            out_path.name, out_path.read_bytes(), {"content-type": "video/mp4"}
-        )
-        return self._sb.storage.from_("videos").get_public_url(out_path.name)
+        return self._upload_video(out_path, out_path.name)
 
     def process_approved_voiceovers(self, niche_id: str) -> None:
         videos = execute_with_retry(

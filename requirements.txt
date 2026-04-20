@@ -16,3 +16,4 @@ pytest-mock>=3.12.0
 python-dotenv>=1.0.0
 remotion-lambda>=4.0.290
 mutagen>=1.47.0
+tuspy>=1.0.0

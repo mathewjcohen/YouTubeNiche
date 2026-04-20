@@ -79,20 +79,14 @@ _BOTO_CONFIG = BotocoreConfig(
     retries={"max_attempts": 1},
 )
 
-
-class _RemotionClientWithTimeout:
-    """Thin wrapper that injects a longer boto3 timeout into RemotionClient."""
-
-    def __init__(self, region: str, serve_url: str, function_name: str):
-        from remotion_lambda import RemotionClient
-        self._inner = RemotionClient(region=region, serve_url=serve_url, function_name=function_name)
-        # Monkey-patch the client factory on this instance only
-        self._inner._create_lambda_client = self._create_lambda_client
-        self.render_media_on_lambda = self._inner.render_media_on_lambda
-        self.get_render_progress = self._inner.get_render_progress
-
-    def _create_lambda_client(self):
-        return boto3.client("lambda", region_name=self._inner.region, config=_BOTO_CONFIG)
+# Patch RemotionClient at class level so all instances use the extended timeout.
+try:
+    from remotion_lambda import RemotionClient as _RemotionClient
+    _RemotionClient._create_lambda_client = lambda self: boto3.client(
+        "lambda", region_name=self.region, config=_BOTO_CONFIG
+    )
+except ImportError:
+    pass
 
 
 class RemotionRenderer:
@@ -160,7 +154,8 @@ class RemotionRenderer:
         scenes[-1]["durationFrames"] += total_frames - allocated
 
         # 3. Trigger Remotion Lambda render
-        client = _RemotionClientWithTimeout(
+        from remotion_lambda import RemotionClient
+        client = RemotionClient(
             region=get_env("REMOTION_REGION"),
             serve_url=get_env("REMOTION_SERVE_URL"),
             function_name=get_env("REMOTION_FUNCTION_NAME"),

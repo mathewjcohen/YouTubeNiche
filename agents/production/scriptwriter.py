@@ -18,8 +18,13 @@ Write a complete video script (~1,800 words, ~12 minutes) in this structure:
 - Lesson (2 min): what the viewer can learn or action they can take
 - CTA (30 sec): "If this happened to you..." + subscribe line
 
-CRITICAL: Output ONLY the spoken narration — nothing else. No title. No section headers. No timestamps.
-No brackets. No stage directions. No camera notes. No production metadata of any kind.
+B-ROLL TAGS: At 5–6 natural visual breaks (roughly every 2 minutes), insert a line:
+[B-ROLL: <specific visual matching the moment — e.g. "lawyer reading documents at desk", "stressed person opening mail", "courtroom gavel closeup">]
+These tags are stripped before audio recording — they guide video editing only. Make them specific
+and searchable, not generic. Do not stack multiple tags; one per break.
+
+CRITICAL: Apart from [B-ROLL:] tags, output ONLY the spoken narration — no title, no section headers,
+no timestamps, no stage directions, no camera notes, no other brackets or production metadata.
 Your response begins with the first spoken word of the narration and ends with the last."""
 
 SHORT_FORM_PROMPT = """You are writing a YouTube Short script (60 seconds, ~200 words) based on this longer script.
@@ -32,8 +37,12 @@ The Short should:
 Full script for reference:
 {long_form}
 
-CRITICAL: Output ONLY the spoken narration — nothing else. No title. No label. No duration. No headers.
-No "YouTube Short", no "60 seconds", no "Script:", no brackets, no production notes of any kind.
+B-ROLL TAGS: Include 2–3 tags at natural visual breaks:
+[B-ROLL: <specific visual — e.g. "person reviewing legal documents", "stressed woman on phone">]
+These are stripped before recording — they guide video editing only. Make them specific and searchable.
+
+CRITICAL: Apart from [B-ROLL:] tags, output ONLY the spoken narration — no title, no label, no duration,
+no headers, no "YouTube Short", no "Script:", no other brackets or production notes.
 Your response begins with the first spoken word of the narration and ends with the last."""
 
 METADATA_PROMPT = """Generate YouTube metadata for this video script.

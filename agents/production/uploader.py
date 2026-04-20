@@ -113,8 +113,11 @@ class YouTubeUploader:
         video_id = response["id"]
 
         if local_thumb:
-            thumb_media = MediaFileUpload(str(local_thumb), mimetype="image/jpeg")
-            self._yt.thumbnails().set(videoId=video_id, media_body=thumb_media).execute()
+            try:
+                thumb_media = MediaFileUpload(str(local_thumb), mimetype="image/jpeg")
+                self._yt.thumbnails().set(videoId=video_id, media_body=thumb_media).execute()
+            except Exception as thumb_err:
+                print(f"[uploader] thumbnail set skipped for {video_id}: {thumb_err}")
 
         local_video.unlink(missing_ok=True)
         if local_thumb:

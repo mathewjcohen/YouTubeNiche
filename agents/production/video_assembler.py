@@ -20,6 +20,8 @@ from agents.shared.db_retry import execute_with_retry
 
 
 BROLL_PATTERN = re.compile(r"\[B-ROLL:\s*(.+?)\]", re.IGNORECASE)
+CLIPS_PER_TAG = 3    # clips fetched per B-ROLL tag
+MAX_CLIP_SEC = 15    # cap clip length so cuts stay snappy
 
 
 def extract_scene_tags(script: str) -> List[str]:
@@ -32,7 +34,7 @@ class PexelsClient:
     def __init__(self, api_key: str):
         self._headers = {"Authorization": api_key}
 
-    def search_video_urls(self, query: str, count: int = 3) -> List[str]:
+    def search_video_urls(self, query: str, count: int = CLIPS_PER_TAG) -> List[str]:
         resp = requests.get(
             f"{self.BASE}/search",
             headers=self._headers,
@@ -108,32 +110,43 @@ class VideoAssembler:
 
             audio = AudioFileClip(audio_path)
             total_duration = audio.duration
-            clip_duration = total_duration / max(len(tags), 1)
-            clips = []
-            for i, tag in enumerate(tags):
-                urls = self._pexels.search_video_urls(tag, count=1)
-                if not urls:
-                    clip = ColorClip(
-                        size=(self.TARGET_WIDTH, self.TARGET_HEIGHT),
-                        color=(0, 0, 0),
-                        duration=clip_duration,
-                    )
-                else:
-                    dest = Path(tmpdir) / f"clip_{i}.mp4"
-                    self._pexels.download_clip(urls[0], dest)
-                    raw = VideoFileClip(str(dest))
-                    if raw.duration < clip_duration:
-                        loops = int(clip_duration / raw.duration) + 1
-                        raw = concatenate_videoclips([raw] * loops)
-                    clip = raw.subclip(0, clip_duration).resize((self.TARGET_WIDTH, self.TARGET_HEIGHT))
-                clips.append(clip)
 
-            video = concatenate_videoclips(clips, method="chain")
+            # Build a pool of short clips (one per Pexels result across all tags).
+            # Capped at MAX_CLIP_SEC so cuts stay snappy; pool is then cycled to
+            # fill the full audio duration instead of looping one clip per segment.
+            pool: List[VideoFileClip] = []
+            for i, tag in enumerate(tags):
+                urls = self._pexels.search_video_urls(tag, count=CLIPS_PER_TAG)
+                for j, url in enumerate(urls):
+                    dest = Path(tmpdir) / f"clip_{i}_{j}.mp4"
+                    try:
+                        self._pexels.download_clip(url, dest)
+                        raw = VideoFileClip(str(dest))
+                        cap = min(raw.duration, MAX_CLIP_SEC)
+                        pool.append(raw.subclip(0, cap).resize((self.TARGET_WIDTH, self.TARGET_HEIGHT)))
+                    except Exception as exc:
+                        print(f"[assembler] clip {i}_{j} download failed: {exc}")
+
+            if not pool:
+                pool = [ColorClip(size=(self.TARGET_WIDTH, self.TARGET_HEIGHT), color=(0, 0, 0), duration=5)]
+
+            # Cycle through pool clips until total_duration is filled
+            timeline: List = []
+            elapsed = 0.0
+            idx = 0
+            while elapsed < total_duration:
+                clip = pool[idx % len(pool)]
+                remaining = total_duration - elapsed
+                segment = clip.subclip(0, min(clip.duration, remaining))
+                timeline.append(segment)
+                elapsed += segment.duration
+                idx += 1
+
+            video = concatenate_videoclips(timeline, method="chain")
             video = video.set_audio(audio)
-            video = video.subclip(0, min(total_duration, video.duration))
 
             out_path = self._output_dir / f"{output_stem}.mp4"
-            print(f"[assembler] encoding {output_stem} ({total_duration:.1f}s audio, {len(clips)} clips)…")
+            print(f"[assembler] encoding {output_stem} ({total_duration:.1f}s audio, {len(pool)} clips cycling)…")
             video.write_videofile(
                 str(out_path),
                 fps=self.FPS,

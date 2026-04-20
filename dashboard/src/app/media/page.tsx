@@ -28,13 +28,26 @@ type ScriptGroup = {
   videos: VideoRow[]
 }
 
+function hasActiveGate(v: VideoRow): boolean {
+  return (
+    v.gate4_state === 'awaiting_review' || v.gate4_state === 'rejected' ||
+    v.gate5_state === 'awaiting_review' || v.gate5_state === 'rejected' ||
+    v.gate6_state === 'awaiting_review' || v.gate6_state === 'rejected'
+  )
+}
+
 function deduplicateVideos(videos: VideoRow[]): VideoRow[] {
-  // Keep only the newest row per (script_id, video_type) — guards against agent double-runs
+  // Per (script_id, video_type): prefer the row with an active review gate; break ties by newest.
   const seen = new Map<string, VideoRow>()
   for (const v of videos) {
     const key = `${v.script_id}:${v.video_type}`
     const prev = seen.get(key)
-    if (!prev || v.created_at > prev.created_at) seen.set(key, v)
+    if (!prev) { seen.set(key, v); continue }
+    const vActive = hasActiveGate(v)
+    const prevActive = hasActiveGate(prev)
+    if (vActive && !prevActive) seen.set(key, v)
+    else if (!vActive && prevActive) { /* keep prev */ }
+    else if (v.created_at > prev.created_at) seen.set(key, v)
   }
   return Array.from(seen.values())
 }

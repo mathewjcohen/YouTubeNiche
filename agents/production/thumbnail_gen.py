@@ -226,7 +226,7 @@ class ThumbnailGenerator:
                 try:
                     videos = (
                         self._sb.table("videos")
-                        .select("id")
+                        .select("id, gate5_state")
                         .eq("script_id", script["id"])
                         .eq("video_type", video_type)
                         .execute()
@@ -236,9 +236,13 @@ class ThumbnailGenerator:
                     if not videos:
                         print(f"[thumbnail] no video rows found for script {script['id']} ({video_type}) — skipping upload")
                         continue
+                    pending_videos = [v for v in videos if v.get("gate5_state") != "approved"]
+                    if not pending_videos:
+                        print(f"[thumbnail] all video rows already approved for {stem} — skipping")
+                        continue
                     thumb_url = self._upload(out)
                     print(f"[thumbnail] uploaded → {thumb_url}")
-                    for video in videos:
+                    for video in pending_videos:
                         self._sb.table("videos").update(
                             {"thumbnail_path": thumb_url}
                         ).eq("id", video["id"]).execute()

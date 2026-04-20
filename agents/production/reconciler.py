@@ -59,7 +59,11 @@ class Reconciler:
         )
         execute_with_retry(
             self._sb.table("scripts")
-            .update({"gate3_state": "awaiting_review", "status": "approved"})
+            .update({
+                "gate3_state": "awaiting_review",
+                "status": "approved",
+                "rejection_reason": "YouTube video was deleted — returned for review",
+            })
             .in_("id", script_ids)
         )
 

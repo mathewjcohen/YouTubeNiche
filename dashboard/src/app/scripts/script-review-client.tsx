@@ -32,11 +32,17 @@ export function ScriptReviewClient({ script }: { script: Script & { niches: { na
   })
 
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 space-y-4">
+    <div className={`bg-gray-800 border rounded-lg p-5 space-y-4 ${script.rejection_reason ? 'border-yellow-600/60' : 'border-gray-700'}`}>
       <div className="flex items-center gap-2">
         <span className="font-semibold text-sm text-gray-100">{script.niches?.name}</span>
         <span className="text-xs text-gray-500">{new Date(script.created_at).toLocaleDateString()}</span>
       </div>
+
+      {script.rejection_reason && (
+        <div className="bg-yellow-900/30 border border-yellow-700/50 rounded px-3 py-2 text-xs text-yellow-300 font-medium">
+          {script.rejection_reason}
+        </div>
+      )}
 
       {script.youtube_title && (
         <p className="text-sm font-medium text-blue-400">Title: {script.youtube_title}</p>

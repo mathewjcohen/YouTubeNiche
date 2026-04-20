@@ -4,6 +4,7 @@ import {
   approveGate5ForScript, rejectGate5ForScript, retryThumbnailForScript,
   retryVoiceover, retryVideoAssembly,
 } from '@/app/actions/media'
+import { Form, SubmitButton } from '@/components/form'
 import type { Video } from '@/lib/types'
 
 const GATE_LABELS: Record<4 | 5 | 6, string> = {
@@ -173,27 +174,30 @@ function ScriptGroupCard({ group }: { group: ScriptGroup }) {
                 <div className="flex gap-2 flex-wrap">
                   {!isRejected && (
                     <>
-                      <form action={approveGate5ForScript.bind(null, group.scriptId)}>
-                        <button className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700">
+                      <Form action={approveGate5ForScript.bind(null, group.scriptId)} successMessage="Thumbnail approved">
+                        <SubmitButton className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700">
                           Approve
-                        </button>
-                      </form>
-                      <form action={async (fd: FormData) => {
-                        'use server'
-                        await rejectGate5ForScript(group.scriptId, fd.get('reason') as string || 'Rejected')
-                      }}>
+                        </SubmitButton>
+                      </Form>
+                      <Form
+                        action={async (fd: FormData) => {
+                          'use server'
+                          await rejectGate5ForScript(group.scriptId, fd.get('reason') as string || 'Rejected')
+                        }}
+                        successMessage="Thumbnail rejected"
+                      >
                         <input name="reason" placeholder="Reason" className="border border-gray-600 bg-gray-700 text-gray-100 placeholder:text-gray-500 rounded px-2 py-1 text-xs w-32" />
-                        <button className="bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded hover:bg-gray-600 ml-1">
+                        <SubmitButton className="bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded hover:bg-gray-600 ml-1">
                           Reject
-                        </button>
-                      </form>
+                        </SubmitButton>
+                      </Form>
                     </>
                   )}
-                  <form action={retryThumbnailForScript.bind(null, group.scriptId)}>
-                    <button className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
+                  <Form action={retryThumbnailForScript.bind(null, group.scriptId)} successMessage="Thumbnail retry queued">
+                    <SubmitButton className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
                       Retry
-                    </button>
-                  </form>
+                    </SubmitButton>
+                  </Form>
                 </div>
               </div>
             )
@@ -237,34 +241,37 @@ function ScriptGroupCard({ group }: { group: ScriptGroup }) {
                         <div className="flex gap-2 flex-wrap">
                           {!isRejected && (
                             <>
-                              <form action={approveMedia.bind(null, v.id, gate)}>
-                                <button className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700">
+                              <Form action={approveMedia.bind(null, v.id, gate)} successMessage={`Gate ${gate} approved`}>
+                                <SubmitButton className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700">
                                   Approve
-                                </button>
-                              </form>
-                              <form action={async (fd: FormData) => {
-                                'use server'
-                                await rejectMedia(v.id, gate, fd.get('reason') as string || 'Rejected')
-                              }}>
+                                </SubmitButton>
+                              </Form>
+                              <Form
+                                action={async (fd: FormData) => {
+                                  'use server'
+                                  await rejectMedia(v.id, gate, fd.get('reason') as string || 'Rejected')
+                                }}
+                                successMessage={`Gate ${gate} rejected`}
+                              >
                                 <input name="reason" placeholder="Reason" className="border border-gray-600 bg-gray-700 text-gray-100 placeholder:text-gray-500 rounded px-2 py-1 text-xs w-32" />
-                                <button className="bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded hover:bg-gray-600 ml-1">
+                                <SubmitButton className="bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded hover:bg-gray-600 ml-1">
                                   Reject
-                                </button>
-                              </form>
+                                </SubmitButton>
+                              </Form>
                             </>
                           )}
                           {gate === 4 ? (
-                            <form action={retryVoiceover.bind(null, v.id)}>
-                              <button className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
+                            <Form action={retryVoiceover.bind(null, v.id)} successMessage="Voiceover retry queued">
+                              <SubmitButton className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
                                 Retry Voiceover
-                              </button>
-                            </form>
+                              </SubmitButton>
+                            </Form>
                           ) : (
-                            <form action={retryVideoAssembly.bind(null, v.id)}>
-                              <button className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
+                            <Form action={retryVideoAssembly.bind(null, v.id)} successMessage="Assembly retry queued">
+                              <SubmitButton className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
                                 Retry Assembly
-                              </button>
-                            </form>
+                              </SubmitButton>
+                            </Form>
                           )}
                         </div>
                       </div>

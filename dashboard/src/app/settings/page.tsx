@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { saveGateConfig, setRenderMethod, setPipelineEnabled } from '@/app/actions/settings'
+import { Form, SubmitButton } from '@/components/form'
 import type { GateConfig, Niche } from '@/lib/types'
 
 const GATE_LABELS: Record<number, string> = {
@@ -54,21 +55,20 @@ export default async function SettingsPage() {
           </span>
         </div>
         <p className="text-xs text-gray-500 mb-4">Pausing disables the pipeline_runner GitHub Actions workflow — no scheduled runs will fire. Resume re-enables it.</p>
-        <form action={setPipelineEnabled}>
+        <Form action={setPipelineEnabled} successMessage={pipelineEnabled ? 'Pipeline paused' : 'Pipeline resumed'}>
           <input type="hidden" name="pipeline_enabled" value={pipelineEnabled ? 'false' : 'true'} />
-          <button
-            type="submit"
+          <SubmitButton
             className={`px-4 py-2 rounded text-sm font-medium ${pipelineEnabled ? 'bg-red-700 hover:bg-red-600 text-white' : 'bg-green-700 hover:bg-green-600 text-white'}`}
           >
             {pipelineEnabled ? 'Pause Pipeline' : 'Resume Pipeline'}
-          </button>
-        </form>
+          </SubmitButton>
+        </Form>
       </div>
 
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 mb-6">
         <h2 className="font-semibold mb-1 text-gray-100">Video Render Method</h2>
         <p className="text-xs text-gray-500 mb-4">GitHub extended timeout runs assembly on a 350-min runner. AWS (Remotion Lambda) offloads rendering to Lambda once configured.</p>
-        <form action={setRenderMethod} className="flex gap-3 items-center">
+        <Form action={setRenderMethod} successMessage="Render method saved" className="flex gap-3 items-center">
           <label className={`flex items-center gap-2 border rounded px-4 py-2 cursor-pointer text-sm ${renderMethod === 'github' ? 'border-orange-500 bg-orange-900/20 text-orange-300' : 'border-gray-700 text-gray-400 hover:border-gray-600'}`}>
             <input type="radio" name="render_method" value="github" defaultChecked={renderMethod === 'github'} className="accent-orange-500" />
             GitHub (extended timeout)
@@ -77,17 +77,17 @@ export default async function SettingsPage() {
             <input type="radio" name="render_method" value="aws" defaultChecked={renderMethod === 'aws'} className="accent-orange-500" />
             AWS (Remotion Lambda)
           </label>
-          <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500">
+          <SubmitButton className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500">
             Save
-          </button>
-        </form>
+          </SubmitButton>
+        </Form>
       </div>
 
       <div className="space-y-6">
         {scopes.map((scope) => (
           <div key={scope.id ?? 'global'} className="bg-gray-800 border border-gray-700 rounded-lg p-5">
             <h2 className="font-semibold mb-4 text-gray-100">{scope.label}</h2>
-            <form action={saveGateConfig}>
+            <Form action={saveGateConfig} successMessage="Gate config saved">
               <input type="hidden" name="niche_id" value={scope.id ?? ''} />
               <div className="grid grid-cols-3 gap-4 mb-4">
                 {[1, 2, 3, 4, 5, 6].map((gate) => {
@@ -109,13 +109,10 @@ export default async function SettingsPage() {
                   )
                 })}
               </div>
-              <button
-                type="submit"
-                className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500"
-              >
+              <SubmitButton className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500">
                 Save
-              </button>
-            </form>
+              </SubmitButton>
+            </Form>
           </div>
         ))}
       </div>

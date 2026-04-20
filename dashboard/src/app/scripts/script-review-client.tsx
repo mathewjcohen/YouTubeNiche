@@ -1,5 +1,6 @@
 'use client'
 import { useState, useTransition } from 'react'
+import { toast } from 'sonner'
 import { approveScript, rejectScript, updateScript } from '@/app/actions/scripts'
 import type { Script } from '@/lib/types'
 
@@ -10,13 +11,25 @@ export function ScriptReviewClient({ script }: { script: Script & { niches: { na
   const [pending, startTransition] = useTransition()
 
   const approve = () => startTransition(async () => {
-    if (longForm !== script.long_form_text || short !== script.short_text) {
-      await updateScript(script.id, longForm, short)
+    try {
+      if (longForm !== script.long_form_text || short !== script.short_text) {
+        await updateScript(script.id, longForm, short)
+      }
+      await approveScript(script.id)
+      toast.success('Script approved')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Something went wrong')
     }
-    await approveScript(script.id)
   })
 
-  const reject = () => startTransition(() => rejectScript(script.id, reason || 'Rejected'))
+  const reject = () => startTransition(async () => {
+    try {
+      await rejectScript(script.id, reason || 'Rejected')
+      toast.success('Script rejected')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Something went wrong')
+    }
+  })
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 space-y-4">

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { Nav } from '@/components/nav'
 import { AutoRefresh } from '@/components/auto-refresh'
+import { Toaster } from 'sonner'
 
 export const metadata: Metadata = { title: 'YouTubeNiche Dashboard' }
 
@@ -12,6 +13,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Nav />
         <main className="flex-1 p-6 overflow-auto">{children}</main>
         <AutoRefresh />
+        <Toaster theme="dark" position="bottom-right" richColors />
       </body>
     </html>
   )

@@ -57,9 +57,17 @@ class Reconciler:
             self._sb.table("videos")
             .update({
                 "youtube_video_id": None,
+                "audio_path": None,
+                "srt_path": None,
+                "thumbnail_path": None,
                 "video_path": None,
-                "status": "pending",
+                "gate4_state": "pending",
+                "gate4_rejection_reason": None,
+                "gate5_state": "pending",
+                "gate5_rejection_reason": None,
                 "gate6_state": "pending",
+                "gate6_rejection_reason": None,
+                "status": "pending",
             })
             .in_("youtube_video_id", video_ids)
         )

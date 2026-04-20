@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import {
   approveMedia, rejectMedia,
   approveGate5ForScript, rejectGate5ForScript, retryThumbnailForScript,
-  retryVoiceover, retryVideoAssembly,
+  retryVoiceover, retryVideoAssembly, returnToScript,
 } from '@/app/actions/media'
 import { Form, SubmitButton } from '@/components/form'
 import type { Video } from '@/lib/types'
@@ -274,11 +274,18 @@ function ScriptGroupCard({ group }: { group: ScriptGroup }) {
                             </>
                           )}
                           {gate === 4 ? (
-                            <Form action={retryVoiceover.bind(null, v.id)} successMessage="Voiceover retry queued">
-                              <SubmitButton className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
-                                Retry Voiceover
-                              </SubmitButton>
-                            </Form>
+                            <div className="flex gap-2 flex-wrap">
+                              <Form action={retryVoiceover.bind(null, v.id)} successMessage="Voiceover retry queued">
+                                <SubmitButton className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
+                                  Retry Voiceover
+                                </SubmitButton>
+                              </Form>
+                              <Form action={returnToScript.bind(null, v.id)} successMessage="Returned to script queue">
+                                <SubmitButton className="bg-yellow-700 text-white text-xs px-3 py-1.5 rounded hover:bg-yellow-600">
+                                  Return to Script
+                                </SubmitButton>
+                              </Form>
+                            </div>
                           ) : (
                             <>
                               <Form action={retryVoiceover.bind(null, v.id)} successMessage="Voiceover retry queued">

@@ -29,6 +29,8 @@ class NichePerformance:
     views_total: int
     ctr: float
     avg_watch_time_pct: float
+    videos_published: int = 0
+    shorts_published: int = 0
 
 
 def should_promote(perf: NichePerformance) -> bool:
@@ -57,6 +59,32 @@ class AnalyticsPoller:
         self._yt = build_youtube_service()
         self._analytics = build("youtubeAnalytics", "v2", credentials=self._yt._http.credentials)
 
+    def _fetch_video_counts(self, niche_id: str, channel_id: str) -> tuple[int, int]:
+        """Returns (total_from_youtube, shorts_from_db). Longs = total - shorts."""
+        total = 0
+        try:
+            result = self._yt.channels().list(part="statistics", id=channel_id).execute()
+            items = result.get("items", [])
+            if items:
+                total = int(items[0].get("statistics", {}).get("videoCount", 0))
+        except Exception as e:
+            print(f"[analytics] channels.list failed for {niche_id}: {e}")
+
+        shorts = 0
+        try:
+            resp = execute_with_retry(
+                self._sb.table("videos")
+                .select("id", count="exact")
+                .eq("niche_id", niche_id)
+                .eq("video_type", "short")
+                .not_.is_("youtube_video_id", "null")
+            )
+            shorts = resp.count or 0
+        except Exception as e:
+            print(f"[analytics] shorts count query failed for {niche_id}: {e}")
+
+        return total, shorts
+
     def poll_niche(self, niche_id: str, channel_id: str) -> Optional[NichePerformance]:
         try:
             end_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -75,10 +103,13 @@ class AnalyticsPoller:
             avg_ctr = sum(float(r[4]) for r in rows) / len(rows) / 100
             avg_view_dur = sum(float(r[3]) for r in rows) / len(rows)
             watch_pct = min(avg_view_dur / 480, 1.0)
+            total_published, shorts_published = self._fetch_video_counts(niche_id, channel_id)
             return NichePerformance(
                 views_total=total_views,
                 ctr=avg_ctr,
                 avg_watch_time_pct=watch_pct,
+                videos_published=max(0, total_published - shorts_published),
+                shorts_published=shorts_published,
             )
         except Exception as e:
             print(f"[analytics] failed to poll niche {niche_id}: {e}")
@@ -108,6 +139,8 @@ class AnalyticsPoller:
                     "ctr": perf.ctr,
                     "avg_watch_time_pct": perf.avg_watch_time_pct,
                     "early_promotion_flagged": should_flag_early(perf),
+                    "videos_published": perf.videos_published,
+                    "shorts_published": perf.shorts_published,
                 }
             ))
 

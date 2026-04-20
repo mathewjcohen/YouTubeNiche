@@ -33,7 +33,6 @@ async function getHomeData() {
     { count: pendingGate4 },
     { count: pendingGate5 },
     { count: pendingGate6 },
-    { count: publishedVideos },
     { data: recentAnalytics },
     { data: niches },
     { data: topics },
@@ -47,8 +46,7 @@ async function getHomeData() {
     supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate4_state', 'awaiting_review'),
     supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate5_state', 'awaiting_review'),
     supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate6_state', 'awaiting_review'),
-    supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate6_state', 'approved'),
-    supabase.from('niche_analytics').select('polled_at, views_total, niche_id').order('polled_at', { ascending: false }).limit(60),
+    supabase.from('niche_analytics').select('polled_at, views_total, videos_published, shorts_published, niche_id').order('polled_at', { ascending: false }).limit(60),
     supabase.from('niches').select('id, name, category, status').in('status', ['testing', 'promoted']).order('status'),
     supabase.from('topics').select('niche_id, gate2_state'),
     supabase.from('scripts').select('niche_id, gate3_state'),
@@ -58,8 +56,14 @@ async function getHomeData() {
   const totalPending = (pendingGate1 ?? 0) + (pendingGate2 ?? 0) + (pendingGate3 ?? 0)
     + (pendingGate4 ?? 0) + (pendingGate5 ?? 0) + (pendingGate6 ?? 0)
 
-  // Most recent snapshot for views total
-  const weeklyViews = recentAnalytics?.[0]?.views_total ?? 0
+  // Most recent snapshot per niche — sum for top-level stats
+  const latestByNiche = new Map<string, typeof recentAnalytics[0]>()
+  for (const row of recentAnalytics ?? []) {
+    if (!latestByNiche.has(row.niche_id)) latestByNiche.set(row.niche_id, row)
+  }
+  const weeklyViews = Array.from(latestByNiche.values()).reduce((s, r) => s + (r.views_total ?? 0), 0)
+  const publishedVideos = Array.from(latestByNiche.values()).reduce((s, r) => s + (r.videos_published ?? 0), 0)
+  const publishedShorts = Array.from(latestByNiche.values()).reduce((s, r) => s + (r.shorts_published ?? 0), 0)
 
   // Build funnel data from actual counts
   const totalTopics = (topics ?? []).length
@@ -69,7 +73,7 @@ async function getHomeData() {
     { stage: 'Topics', count: totalTopics },
     { stage: 'Scripts', count: totalScripts },
     { stage: 'Videos', count: totalVideos },
-    { stage: 'Published', count: publishedVideos ?? 0 },
+    { stage: 'Published', count: publishedVideos + publishedShorts },
   ]
 
   // Gate queue breakdown
@@ -105,7 +109,8 @@ async function getHomeData() {
     activeChannels: activeChannels ?? 0,
     totalPending,
     weeklyViews,
-    publishedVideos: publishedVideos ?? 0,
+    publishedVideos,
+    publishedShorts,
     funnelData,
     gateQueue,
     viewsTimeline,
@@ -123,10 +128,11 @@ export default async function HomePage() {
         <h1 className="text-2xl font-bold mb-6">Network Overview</h1>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-5 gap-4">
           <StatCard label="Active Channels" value={data.activeChannels} />
           <StatCard label="Pending Reviews" value={data.totalPending} highlight={data.totalPending > 0} />
           <StatCard label="Published Videos" value={data.publishedVideos} />
+          <StatCard label="Published Shorts" value={data.publishedShorts} />
           <StatCard label="Total Views" value={data.weeklyViews.toLocaleString()} />
         </div>
       </div>

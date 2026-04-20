@@ -73,6 +73,25 @@ export async function retryThumbnailForScript(scriptId: string): Promise<void> {
   revalidatePath('/media')
 }
 
+export async function returnToScript(videoId: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: video, error: fetchErr } = await supabase
+    .from('videos')
+    .select('script_id')
+    .eq('id', videoId)
+    .single()
+  if (fetchErr || !video) throw new Error(fetchErr?.message ?? 'Video not found')
+  const { error: delError } = await supabase.from('videos').delete().eq('id', videoId)
+  if (delError) throw new Error(delError.message)
+  const { error: updError } = await supabase
+    .from('scripts')
+    .update({ gate3_state: 'awaiting_review', status: 'approved' })
+    .eq('id', video.script_id)
+  if (updError) throw new Error(updError.message)
+  revalidatePath('/media')
+  revalidatePath('/scripts')
+}
+
 export async function retryVoiceover(videoId: string): Promise<void> {
   const supabase = await createClient()
   // Look up which script this video belongs to

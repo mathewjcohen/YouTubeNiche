@@ -99,6 +99,8 @@ export interface NicheAnalytics {
   avg_watch_time_pct: number
   subs_total: number
   early_promotion_flagged: boolean
+  videos_published: number
+  shorts_published: number
 }
 
 export interface PendingCounts {

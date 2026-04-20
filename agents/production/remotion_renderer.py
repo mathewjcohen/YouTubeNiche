@@ -241,4 +241,6 @@ class RemotionRenderer:
                 )
                 print(f"[remotion] video {video['id']} assembled → {out_url}")
             except Exception as exc:
-                print(f"[remotion] video {video['id']} failed, will retry next run: {exc}")
+                import traceback
+                print(f"[remotion] video {video['id']} failed ({type(exc).__name__}), will retry next run: {exc}")
+                print(f"[remotion] traceback:\n{traceback.format_exc()}")

@@ -23,6 +23,9 @@ B-ROLL TAGS: At 5–6 natural visual breaks (roughly every 2 minutes), insert a 
 These tags are stripped before audio recording — they guide video editing only. Make them specific
 and searchable, not generic. Do not stack multiple tags; one per break.
 
+PRIVACY: Never use real names or usernames from the source story, even if they were posted publicly.
+Refer to people by role or description only (e.g. "the landlord", "a Reddit user", "the employer").
+
 CRITICAL: Apart from [B-ROLL:] tags, output ONLY the spoken narration — no title, no section headers,
 no timestamps, no stage directions, no camera notes, no other brackets or production metadata.
 Your response begins with the first spoken word of the narration and ends with the last."""
@@ -40,6 +43,9 @@ Full script for reference:
 B-ROLL TAGS: Include 2–3 tags at natural visual breaks:
 [B-ROLL: <specific visual — e.g. "person reviewing legal documents", "stressed woman on phone">]
 These are stripped before recording — they guide video editing only. Make them specific and searchable.
+
+PRIVACY: Never use real names or usernames from the source story, even if they were posted publicly.
+Refer to people by role or description only (e.g. "the landlord", "a Reddit user", "the employer").
 
 CRITICAL: Apart from [B-ROLL:] tags, output ONLY the spoken narration — no title, no label, no duration,
 no headers, no "YouTube Short", no "Script:", no other brackets or production notes.

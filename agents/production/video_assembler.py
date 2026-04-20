@@ -73,7 +73,7 @@ class VideoAssembler:
         output_dir: str = "output/video",
     ):
         self._sb = supabase
-        self._supabase_url: str = supabase.supabase_url.rstrip("/")
+        self._supabase_url: str = str(supabase.supabase_url).rstrip("/")
         self._supabase_key: str = supabase.supabase_key
         self._gate = gate_client
         self._pexels = pexels_client

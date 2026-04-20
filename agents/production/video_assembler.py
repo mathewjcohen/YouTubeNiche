@@ -61,8 +61,8 @@ class PexelsClient:
 
 
 class VideoAssembler:
-    TARGET_WIDTH = 1920
-    TARGET_HEIGHT = 1080
+    LONG_W, LONG_H = 1920, 1080
+    SHORT_W, SHORT_H = 1080, 1920
     FPS = 24
 
     def __init__(
@@ -97,7 +97,10 @@ class VideoAssembler:
         srt_path: str,
         script_text: str,
         output_stem: str,
+        is_short: bool = False,
     ) -> str:
+        target_w = self.SHORT_W if is_short else self.LONG_W
+        target_h = self.SHORT_H if is_short else self.LONG_H
         tags = extract_scene_tags(script_text)
         if not tags:
             tags = ["nature background", "city timelapse", "office work"]
@@ -123,12 +126,12 @@ class VideoAssembler:
                         self._pexels.download_clip(url, dest)
                         raw = VideoFileClip(str(dest))
                         cap = min(raw.duration, MAX_CLIP_SEC)
-                        pool.append(raw.subclip(0, cap).resize((self.TARGET_WIDTH, self.TARGET_HEIGHT)))
+                        pool.append(raw.subclip(0, cap).resize((target_w, target_h)))
                     except Exception as exc:
                         print(f"[assembler] clip {i}_{j} download failed: {exc}")
 
             if not pool:
-                pool = [ColorClip(size=(self.TARGET_WIDTH, self.TARGET_HEIGHT), color=(0, 0, 0), duration=5)]
+                pool = [ColorClip(size=(target_w, target_h), color=(0, 0, 0), duration=5)]
 
             # Cycle through pool clips until total_duration is filled
             timeline: List = []
@@ -187,6 +190,7 @@ class VideoAssembler:
                     srt_path=video["srt_path"],
                     script_text=script_text,
                     output_stem=stem,
+                    is_short=(video["video_type"] == "short"),
                 )
                 execute_with_retry(
                     self._sb.table("videos").update(

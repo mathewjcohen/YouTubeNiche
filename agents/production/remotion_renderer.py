@@ -3,8 +3,11 @@ import time
 import tempfile
 from pathlib import Path
 
+import boto3
 import requests
+from botocore.config import Config as BotocoreConfig
 from supabase import Client
+from tusclient import client as tus_client
 
 from agents.shared.gate_client import GateClient
 from agents.shared.db_retry import execute_with_retry
@@ -70,13 +73,60 @@ def _audio_duration_sec(audio_url: str) -> float:
     return audio.info.length
 
 
+_BOTO_CONFIG = BotocoreConfig(
+    read_timeout=600,    # 10 min — accommodates Lambda cold start + render orchestration
+    connect_timeout=30,
+    retries={"max_attempts": 1},
+)
+
+
+class _RemotionClientWithTimeout:
+    """Thin wrapper that injects a longer boto3 timeout into RemotionClient."""
+
+    def __init__(self, region: str, serve_url: str, function_name: str):
+        from remotion_lambda import RemotionClient
+        self._inner = RemotionClient(region=region, serve_url=serve_url, function_name=function_name)
+        # Monkey-patch the client factory on this instance only
+        self._inner._create_lambda_client = self._create_lambda_client
+        self.render_media_on_lambda = self._inner.render_media_on_lambda
+        self.get_render_progress = self._inner.get_render_progress
+
+    def _create_lambda_client(self):
+        return boto3.client("lambda", region_name=self._inner.region, config=_BOTO_CONFIG)
+
+
 class RemotionRenderer:
+    TUS_CHUNK_SIZE = 6 * 1024 * 1024  # 6 MB — Supabase recommended chunk size
+
     def __init__(self, supabase: Client, gate_client: GateClient):
         self._sb = supabase
+        self._supabase_url: str = supabase.supabase_url.rstrip("/")
+        self._supabase_key: str = supabase.supabase_key
         self._gate = gate_client
 
+    def _upload_video(self, file_path: Path, object_name: str) -> str:
+        tus_url = f"{self._supabase_url}/storage/v1/upload/resumable"
+        headers = {
+            "Authorization": f"Bearer {self._supabase_key}",
+            "x-upsert": "true",
+        }
+        metadata = {
+            "bucketName": "videos",
+            "objectName": object_name,
+            "contentType": "video/mp4",
+            "cacheControl": "3600",
+        }
+        tc = tus_client.TusClient(tus_url, headers=headers)
+        uploader = tc.uploader(
+            file_path=str(file_path),
+            chunk_size=self.TUS_CHUNK_SIZE,
+            metadata=metadata,
+        )
+        uploader.upload()
+        return f"{self._supabase_url}/storage/v1/object/public/videos/{object_name}"
+
     def render(self, audio_url: str, script_text: str, output_stem: str) -> str:
-        from remotion_lambda import RemotionClient, RenderMediaParams
+        from remotion_lambda import RenderMediaParams
 
         pexels_key = get_env("PEXELS_API_KEY")
         pexels_headers = {"Authorization": pexels_key}
@@ -110,7 +160,7 @@ class RemotionRenderer:
         scenes[-1]["durationFrames"] += total_frames - allocated
 
         # 3. Trigger Remotion Lambda render
-        client = RemotionClient(
+        client = _RemotionClientWithTimeout(
             region=get_env("REMOTION_REGION"),
             serve_url=get_env("REMOTION_SERVE_URL"),
             function_name=get_env("REMOTION_FUNCTION_NAME"),
@@ -149,16 +199,20 @@ class RemotionRenderer:
         else:
             raise TimeoutError(f"Remotion render timed out after {RENDER_TIMEOUT}s")
 
-        # 5. Download output and store in Supabase videos bucket
+        # 5. Download output and store in Supabase videos bucket via TUS
         output_url = progress.outputFile
         print(f"[remotion] render complete → {output_url}")
-        out_resp = requests.get(output_url, timeout=300)
-        out_resp.raise_for_status()
         storage_key = f"{output_stem}.mp4"
-        self._sb.storage.from_("videos").upload(
-            storage_key, out_resp.content, {"content-type": "video/mp4"}
-        )
-        return self._sb.storage.from_("videos").get_public_url(storage_key)
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+            out_resp = requests.get(output_url, stream=True, timeout=300)
+            out_resp.raise_for_status()
+            for chunk in out_resp.iter_content(chunk_size=1 << 20):
+                tmp.write(chunk)
+            tmp_path = Path(tmp.name)
+        try:
+            return self._upload_video(tmp_path, storage_key)
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
     def process_approved_voiceovers(self, niche_id: str) -> None:
         videos = execute_with_retry(

@@ -34,11 +34,11 @@ class PexelsClient:
     def __init__(self, api_key: str):
         self._headers = {"Authorization": api_key}
 
-    def search_video_urls(self, query: str, count: int = CLIPS_PER_TAG) -> List[str]:
+    def search_video_urls(self, query: str, count: int = CLIPS_PER_TAG, orientation: str = "landscape") -> List[str]:
         resp = requests.get(
             f"{self.BASE}/search",
             headers=self._headers,
-            params={"query": query, "per_page": count, "orientation": "landscape"},
+            params={"query": query, "per_page": count, "orientation": orientation},
             timeout=10,
         )
         resp.raise_for_status()
@@ -117,16 +117,22 @@ class VideoAssembler:
             # Build a pool of short clips (one per Pexels result across all tags).
             # Capped at MAX_CLIP_SEC so cuts stay snappy; pool is then cycled to
             # fill the full audio duration instead of looping one clip per segment.
+            orientation = "portrait" if is_short else "landscape"
             pool: List[VideoFileClip] = []
             for i, tag in enumerate(tags):
-                urls = self._pexels.search_video_urls(tag, count=CLIPS_PER_TAG)
+                urls = self._pexels.search_video_urls(tag, count=CLIPS_PER_TAG, orientation=orientation)
                 for j, url in enumerate(urls):
                     dest = Path(tmpdir) / f"clip_{i}_{j}.mp4"
                     try:
                         self._pexels.download_clip(url, dest)
                         raw = VideoFileClip(str(dest))
                         cap = min(raw.duration, MAX_CLIP_SEC)
-                        pool.append(raw.subclip(0, cap).resize((target_w, target_h)))
+                        sub = raw.subclip(0, cap)
+                        # Cover-crop: scale to fill target frame, then center-crop
+                        scale = max(target_w / sub.w, target_h / sub.h)
+                        scaled = sub.resize(scale)
+                        cropped = scaled.crop(x_center=scaled.w / 2, y_center=scaled.h / 2, width=target_w, height=target_h)
+                        pool.append(cropped)
                     except Exception as exc:
                         print(f"[assembler] clip {i}_{j} download failed: {exc}")
 

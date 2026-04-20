@@ -1,0 +1,126 @@
+"""
+Reconciler: compares youtube_video_id values in the DB against the YouTube
+Data API to detect videos deleted from YouTube. Resets deleted rows so the
+assembler can re-queue them for assembly and re-upload.
+"""
+
+from typing import Optional
+
+from supabase import Client, create_client
+
+from agents.shared.config_loader import get_env
+from agents.shared.db_retry import execute_with_retry, patch_postgrest_http1
+from agents.production.uploader import build_youtube_service, SCOPES
+
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+import json
+
+BATCH_SIZE = 50
+
+
+class Reconciler:
+    def __init__(self, supabase: Client):
+        self._sb = supabase
+
+    def _build_service_for_account(self, account_id: str):
+        rows = execute_with_retry(
+            self._sb.table("youtube_accounts")
+            .select("token_json, channel_id")
+            .eq("id", account_id)
+            .limit(1)
+        ).data
+        if not rows:
+            return None
+        token_dict = rows[0]["token_json"]
+        creds = Credentials.from_authorized_user_info(token_dict, SCOPES)
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            execute_with_retry(
+                self._sb.table("youtube_accounts")
+                .update({"token_json": json.loads(creds.to_json())})
+                .eq("id", account_id)
+            )
+        return build_youtube_service(token_dict=json.loads(creds.to_json()) if creds.expired else token_dict)
+
+    def _check_batch(self, yt, video_ids: list[str]) -> set[str]:
+        """Returns the subset of video_ids that still exist on YouTube."""
+        try:
+            resp = yt.videos().list(part="id", id=",".join(video_ids)).execute()
+            return {item["id"] for item in resp.get("items", [])}
+        except Exception as e:
+            print(f"[reconciler] videos.list failed: {e}")
+            return set(video_ids)  # assume all live on error to avoid false resets
+
+    def _reset_deleted(self, video_ids: list[str]) -> None:
+        execute_with_retry(
+            self._sb.table("videos")
+            .update({
+                "youtube_video_id": None,
+                "video_path": None,
+                "status": "pending",
+                "gate6_state": "pending",
+            })
+            .in_("youtube_video_id", video_ids)
+        )
+
+    def run(self) -> None:
+        niches = execute_with_retry(
+            self._sb.table("niches")
+            .select("id, name, youtube_account_id, channel_state")
+            .eq("channel_state", "linked")
+        ).data
+
+        total_reset = 0
+        for niche in niches:
+            account_id = niche.get("youtube_account_id")
+            if not account_id:
+                continue
+
+            yt = self._build_service_for_account(account_id)
+            if not yt:
+                print(f"[reconciler] no token for niche {niche['name']} — skipping")
+                continue
+
+            db_videos = execute_with_retry(
+                self._sb.table("videos")
+                .select("id, youtube_video_id, video_type, scripts(youtube_title)")
+                .eq("niche_id", niche["id"])
+                .not_.is_("youtube_video_id", "null")
+            ).data
+
+            if not db_videos:
+                continue
+
+            id_map = {v["youtube_video_id"]: v for v in db_videos}
+            yt_ids = list(id_map.keys())
+
+            live_ids: set[str] = set()
+            for i in range(0, len(yt_ids), BATCH_SIZE):
+                batch = yt_ids[i : i + BATCH_SIZE]
+                live_ids |= self._check_batch(yt, batch)
+
+            deleted = [vid for vid in yt_ids if vid not in live_ids]
+            if not deleted:
+                print(f"[reconciler] {niche['name']}: all {len(yt_ids)} video(s) live")
+                continue
+
+            for yt_id in deleted:
+                row = id_map[yt_id]
+                title = (row.get("scripts") or {}).get("youtube_title", "—")
+                print(f"[reconciler] DELETED  {niche['name']} | {row['video_type']} | {yt_id} | {title}")
+
+            self._reset_deleted(deleted)
+            total_reset += len(deleted)
+            print(f"[reconciler] {niche['name']}: reset {len(deleted)} deleted video(s) for re-assembly")
+
+        print(f"[reconciler] done — {total_reset} total video(s) reset")
+
+
+def main():
+    sb = patch_postgrest_http1(create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY")))
+    Reconciler(supabase=sb).run()
+
+
+if __name__ == "__main__":
+    main()

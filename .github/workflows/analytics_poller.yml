@@ -29,3 +29,8 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           YOUTUBE_TOKEN_PATH: config/youtube_token.json
         run: python -m agents.performance.analytics_poller
+      - name: Run YouTube Reconciler
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python -m agents.production.reconciler

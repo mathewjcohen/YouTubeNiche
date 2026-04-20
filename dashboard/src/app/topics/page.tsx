@@ -1,7 +1,27 @@
 import { createClient } from '@/lib/supabase/server'
 import { approveTopic, rejectTopic, approveTopBatch } from '@/app/actions/topics'
 import { Form, SubmitButton } from '@/components/form'
+import { Collapsible } from '@/components/collapsible'
 import type { Topic } from '@/lib/types'
+
+type TopicRow = Topic & { niches: { name: string } }
+
+type NicheGroup = {
+  nicheId: string
+  nicheName: string
+  topics: TopicRow[]
+}
+
+function groupByNiche(topics: TopicRow[]): NicheGroup[] {
+  const map = new Map<string, NicheGroup>()
+  for (const topic of topics) {
+    const id = topic.niche_id
+    const name = topic.niches?.name ?? 'Unknown'
+    if (!map.has(id)) map.set(id, { nicheId: id, nicheName: name, topics: [] })
+    map.get(id)!.topics.push(topic)
+  }
+  return Array.from(map.values())
+}
 
 export default async function TopicsPage() {
   const supabase = await createClient()
@@ -11,11 +31,14 @@ export default async function TopicsPage() {
     .eq('gate2_state', 'awaiting_review')
     .order('claude_score', { ascending: false })
 
+  const rows = (topics ?? []) as TopicRow[]
+  const groups = groupByNiche(rows)
+
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-2xl font-bold">Topic Queue</h1>
-        {(topics?.length ?? 0) > 0 && (
+        {rows.length > 0 && (
           <Form action={approveTopBatch} successMessage="Batch approved" className="flex items-center gap-2">
             <span className="text-xs text-gray-500">Approve top</span>
             <input
@@ -32,14 +55,33 @@ export default async function TopicsPage() {
           </Form>
         )}
       </div>
-      <p className="text-sm text-gray-500 mb-6">Gate 2 — {topics?.length ?? 0} awaiting review</p>
+      <p className="text-sm text-gray-500 mb-6">Gate 2 — {rows.length} awaiting review</p>
 
-      {!topics?.length ? (
+      {!rows.length ? (
         <p className="text-gray-500">Queue is empty.</p>
       ) : (
-        <div className="space-y-4">
-          {topics.map((topic) => (
-            <TopicCard key={topic.id} topic={topic as Topic & { niches: { name: string } }} />
+        <div className="space-y-3">
+          {groups.map((group) => (
+            <Collapsible
+              key={group.nicheId}
+              defaultOpen
+              className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden"
+              titleClassName="px-5 py-3.5"
+              title={
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold text-gray-100">{group.nicheName}</span>
+                  <span className="text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full">
+                    {group.topics.length}
+                  </span>
+                </div>
+              }
+            >
+              <div className="divide-y divide-gray-700 border-t border-gray-700">
+                {group.topics.map((topic) => (
+                  <TopicCard key={topic.id} topic={topic} />
+                ))}
+              </div>
+            </Collapsible>
           ))}
         </div>
       )}
@@ -47,15 +89,13 @@ export default async function TopicsPage() {
   )
 }
 
-function TopicCard({ topic }: { topic: Topic & { niches: { name: string } } }) {
+function TopicCard({ topic }: { topic: TopicRow }) {
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-5">
+    <div className="px-5 py-4">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           <p className="font-semibold text-gray-100">{topic.title}</p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            niche: {topic.niches?.name} · score: {topic.claude_score?.toFixed(1) ?? '—'}
-          </p>
+          <p className="text-xs text-gray-500 mt-0.5">score: {topic.claude_score?.toFixed(1) ?? '—'}</p>
           <p className="text-sm text-gray-400 mt-2 line-clamp-3">{topic.body}</p>
         </div>
         <div className="flex flex-col gap-2 shrink-0">

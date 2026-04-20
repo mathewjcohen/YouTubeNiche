@@ -6,9 +6,10 @@ interface CollapsibleProps {
   defaultOpen?: boolean
   children: React.ReactNode
   className?: string
+  titleClassName?: string
 }
 
-export function Collapsible({ title, defaultOpen = false, children, className = '' }: CollapsibleProps) {
+export function Collapsible({ title, defaultOpen = false, children, className = '', titleClassName = '' }: CollapsibleProps) {
   const [open, setOpen] = useState(defaultOpen)
 
   return (
@@ -16,7 +17,7 @@ export function Collapsible({ title, defaultOpen = false, children, className = 
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between text-left"
+        className={`w-full flex items-center justify-between text-left ${titleClassName}`}
       >
         {title}
         <svg

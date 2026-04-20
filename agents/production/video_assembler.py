@@ -176,8 +176,9 @@ class VideoAssembler:
                 )
                 execute_with_retry(
                     self._sb.table("videos").update(
-                        {"video_path": out_path, "status": "processing"}
+                        {"video_path": out_path, "status": "processing", "gate5_state": "awaiting_review"}
                     ).eq("id", video["id"])
                 )
+                print(f"[assembler] video {video['id']} assembled → {out_path}")
             except Exception as exc:
                 print(f"[assembler] video {video['id']} failed, will retry next run: {exc}")

@@ -249,7 +249,7 @@ class RemotionRenderer:
                 )
                 execute_with_retry(
                     self._sb.table("videos").update(
-                        {"video_path": out_url, "status": "processing"}
+                        {"video_path": out_url, "status": "processing", "gate5_state": "awaiting_review"}
                     ).eq("id", video["id"])
                 )
                 print(f"[remotion] video {video['id']} assembled → {out_url}")

@@ -191,6 +191,8 @@ class RemotionRenderer:
                 },
                 codec="h264",
                 image_format="jpeg",
+                frames_per_lambda=240,  # 10s chunks at 24fps — limits concurrent invocations
+                concurrency_per_lambda=1,
             )
         )
 

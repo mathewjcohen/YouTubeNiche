@@ -154,6 +154,7 @@ class VideoAssembler:
             .select("*, scripts(long_form_text, short_text)")
             .eq("niche_id", niche_id)
             .eq("gate4_state", "approved")
+            .eq("gate5_state", "approved")
             .eq("status", "pending")
         ).data
         for video in videos:
@@ -176,7 +177,7 @@ class VideoAssembler:
                 )
                 execute_with_retry(
                     self._sb.table("videos").update(
-                        {"video_path": out_path, "status": "processing", "gate5_state": "awaiting_review"}
+                        {"video_path": out_path, "status": "processing", "gate6_state": "awaiting_review"}
                     ).eq("id", video["id"])
                 )
                 print(f"[assembler] video {video['id']} assembled → {out_path}")

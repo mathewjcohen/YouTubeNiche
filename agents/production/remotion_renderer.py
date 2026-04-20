@@ -1,3 +1,4 @@
+import math
 import re
 import time
 import tempfile
@@ -193,7 +194,9 @@ class RemotionRenderer:
                 },
                 codec="h264",
                 image_format="jpeg",
-                frames_per_lambda=total_frames,  # single renderer Lambda — avoids concurrency throttle
+                # 1 orchestrator + ≤8 renderers = 9 total, within the 10-execution account limit.
+                # Raise MAX_RENDERERS once the quota increase to 3000 is approved.
+                frames_per_lambda=max(1, math.ceil(total_frames / 8)),
                 concurrency_per_lambda=1,
             )
         )

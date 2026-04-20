@@ -15,6 +15,7 @@ function rejectionColumn(gate: MediaGate): string {
 export async function approveMedia(id: string, gate: MediaGate): Promise<void> {
   const supabase = await createClient()
   const update: Record<string, string> = { [gateColumn(gate)]: 'approved' }
+  if (gate === 5) update.gate6_state = 'awaiting_review'
   // Gate 6 is the final approval — mark video ready for upload
   if (gate === 6) update.status = 'approved'
   const { error } = await supabase.from('videos').update(update).eq('id', id)

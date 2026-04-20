@@ -57,7 +57,8 @@ async function getHomeData() {
     + (pendingGate4 ?? 0) + (pendingGate5 ?? 0) + (pendingGate6 ?? 0)
 
   // Most recent snapshot per niche — sum for top-level stats
-  const latestByNiche = new Map<string, typeof recentAnalytics[0]>()
+  type AnalyticsRow = NonNullable<typeof recentAnalytics>[0]
+  const latestByNiche = new Map<string, AnalyticsRow>()
   for (const row of recentAnalytics ?? []) {
     if (!latestByNiche.has(row.niche_id)) latestByNiche.set(row.niche_id, row)
   }

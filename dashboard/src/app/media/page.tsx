@@ -5,6 +5,7 @@ import {
   retryVoiceover, retryVideoAssembly, returnToScript,
 } from '@/app/actions/media'
 import { Form, SubmitButton } from '@/components/form'
+import { TitleEditor } from './title-editor'
 import type { Video } from '@/lib/types'
 
 const GATE_LABELS: Record<4 | 5 | 6, string> = {
@@ -149,7 +150,7 @@ function ScriptGroupCard({ group }: { group: ScriptGroup }) {
         </div>
 
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-100">{group.title ?? '—'}</p>
+          <TitleEditor scriptId={group.scriptId} initialTitle={group.title} />
           <p className="text-xs text-gray-500 mb-3">{group.nicheName}</p>
 
           {/* Gate 5 — thumbnail, shared across all formats */}

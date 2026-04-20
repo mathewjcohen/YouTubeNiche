@@ -7,13 +7,16 @@ import type { Script } from '@/lib/types'
 export function ScriptReviewClient({ script }: { script: Script & { niches: { name: string } } }) {
   const [longForm, setLongForm] = useState(script.long_form_text)
   const [short, setShort] = useState(script.short_text)
+  const [title, setTitle] = useState(script.youtube_title ?? '')
   const [reason, setReason] = useState('')
   const [pending, startTransition] = useTransition()
 
+  const isDirty = longForm !== script.long_form_text || short !== script.short_text || title !== (script.youtube_title ?? '')
+
   const approve = () => startTransition(async () => {
     try {
-      if (longForm !== script.long_form_text || short !== script.short_text) {
-        await updateScript(script.id, longForm, short)
+      if (isDirty) {
+        await updateScript(script.id, longForm, short, title)
       }
       await approveScript(script.id)
       toast.success('Script approved')
@@ -44,9 +47,15 @@ export function ScriptReviewClient({ script }: { script: Script & { niches: { na
         </div>
       )}
 
-      {script.youtube_title && (
-        <p className="text-sm font-medium text-blue-400">Title: {script.youtube_title}</p>
-      )}
+      <div>
+        <p className="text-xs text-gray-500 mb-1 font-semibold">YouTube Title</p>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="w-full border border-gray-600 bg-gray-700 text-gray-100 rounded px-3 py-2 text-sm"
+          placeholder="YouTube title"
+        />
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -73,7 +82,7 @@ export function ScriptReviewClient({ script }: { script: Script & { niches: { na
           disabled={pending}
           className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 disabled:opacity-50"
         >
-          Approve{longForm !== script.long_form_text || short !== script.short_text ? ' (with edits)' : ''}
+          Approve{isDirty ? ' (with edits)' : ''}
         </button>
         <input
           value={reason}

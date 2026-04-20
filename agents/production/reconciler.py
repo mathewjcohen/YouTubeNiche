@@ -50,22 +50,33 @@ class Reconciler:
             print(f"[reconciler] videos.list failed: {e}")
             return set(video_ids)  # assume all live on error to avoid false resets
 
-    def _reset_deleted(self, deleted_rows: list[dict]) -> None:
-        video_db_ids = [r["id"] for r in deleted_rows]
-        script_ids = list({r["script_id"] for r in deleted_rows})
+    def _reset_deleted(self, deleted_rows: list[dict], all_db_videos: list[dict], live_ids: set[str]) -> None:
+        # Scripts that still have at least one other live upload — treat deletion as a duplicate cleanup
+        live_script_ids = {
+            v["script_id"] for v in all_db_videos if v["youtube_video_id"] in live_ids
+        }
+
+        orphans = [r for r in deleted_rows if r["script_id"] in live_script_ids]
+        needs_reset = [r for r in deleted_rows if r["script_id"] not in live_script_ids]
 
         execute_with_retry(
-            self._sb.table("videos").delete().in_("id", video_db_ids)
+            self._sb.table("videos").delete().in_("id", [r["id"] for r in deleted_rows])
         )
-        execute_with_retry(
-            self._sb.table("scripts")
-            .update({
-                "gate3_state": "awaiting_review",
-                "status": "approved",
-                "rejection_reason": "YouTube video was deleted — returned for review",
-            })
-            .in_("id", script_ids)
-        )
+
+        if orphans:
+            print(f"[reconciler] {len(orphans)} duplicate row(s) removed — other uploads still live, script untouched")
+
+        if needs_reset:
+            script_ids = list({r["script_id"] for r in needs_reset})
+            execute_with_retry(
+                self._sb.table("scripts")
+                .update({
+                    "gate3_state": "awaiting_review",
+                    "status": "approved",
+                    "rejection_reason": "YouTube video was deleted — returned for review",
+                })
+                .in_("id", script_ids)
+            )
 
     def run(self) -> None:
         niches = execute_with_retry(
@@ -112,7 +123,7 @@ class Reconciler:
                 title = (row.get("scripts") or {}).get("youtube_title", "—")
                 print(f"[reconciler] DELETED  {niche['name']} | {row['video_type']} | {row['youtube_video_id']} | {title}")
 
-            self._reset_deleted(deleted_rows)
+            self._reset_deleted(deleted_rows, db_videos, live_ids)
             total_reset += len(deleted_rows)
             print(f"[reconciler] {niche['name']}: returned {len(deleted_rows)} video(s) to script queue")
 

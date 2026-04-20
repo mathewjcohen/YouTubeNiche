@@ -17,6 +17,7 @@ from agents.shared.gate_client import GateClient
 from agents.shared.db_retry import execute_with_retry
 
 SCOPES = [
+    "https://www.googleapis.com/auth/youtube",
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.readonly",
 ]
@@ -167,6 +168,18 @@ class YouTubeUploader:
             ).eq("id", account_id).execute()
         return True
 
+    def _get_long_yt_id(self, script_id: str) -> Optional[str]:
+        """Return the youtube_video_id of the uploaded long-form video for a script, if any."""
+        rows = execute_with_retry(
+            self._sb.table("videos")
+            .select("youtube_video_id")
+            .eq("script_id", script_id)
+            .eq("video_type", "long")
+            .not_.is_("youtube_video_id", "null")
+            .limit(1)
+        ).data
+        return rows[0]["youtube_video_id"] if rows else None
+
     def process_approved_videos(self, niche_id: str) -> None:
         if not self._build_service_for_niche(niche_id):
             print(f"[uploader] niche {niche_id} has no linked YouTube channel — skipping upload")
@@ -179,20 +192,43 @@ class YouTubeUploader:
             .eq("gate6_state", "approved")
             .eq("status", "approved")
         ).data
+
+        # Always upload longs before shorts so the link is available
+        videos.sort(key=lambda v: 0 if v["video_type"] == "long" else 1)
+
+        # Track long video IDs uploaded this run: script_id → youtube_video_id
+        long_yt_ids: Dict[str, str] = {}
+
         for video in videos:
             script = video.get("scripts")
             if not script:
                 print(f"[uploader] video {video['id']} has no linked script, skip")
                 continue
             try:
+                description = script["youtube_description"] or ""
+
+                if video["video_type"] == "short":
+                    long_yt_id = long_yt_ids.get(video["script_id"]) or self._get_long_yt_id(video["script_id"])
+                    if long_yt_id:
+                        link_line = f"Watch the full video: https://www.youtube.com/watch?v={long_yt_id}"
+                        if "\n\n⚠️ DISCLAIMER:" in description:
+                            pre, post = description.split("\n\n⚠️ DISCLAIMER:", 1)
+                            description = pre.rstrip() + f"\n\n{link_line}\n\n⚠️ DISCLAIMER:" + post
+                        else:
+                            description = description.rstrip() + f"\n\n{link_line}"
+
                 yt_id = self.upload(
                     video_path=video["video_path"],
                     thumbnail_path=video["thumbnail_path"],
                     title=script["youtube_title"],
-                    description=script["youtube_description"],
+                    description=description,
                     tags=script.get("youtube_tags", []),
                     is_short=video["video_type"] == "short",
                 )
+
+                if video["video_type"] == "long":
+                    long_yt_ids[video["script_id"]] = yt_id
+
                 execute_with_retry(
                     self._sb.table("videos").update(
                         {"youtube_video_id": yt_id, "status": "uploaded"}

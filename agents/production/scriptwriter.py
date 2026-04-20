@@ -35,7 +35,7 @@ SHORT_FORM_PROMPT = """You are writing a YouTube Short script (60 seconds, ~200 
 The Short should:
 - Open with the single most attention-grabbing line from the full story
 - Summarize the key revelation or outcome in 40–50 seconds
-- End with: "Full story linked in bio."
+- End with: "Watch the full story in the description."
 
 Full script for reference:
 {long_form}

@@ -22,15 +22,27 @@ export async function rejectScript(id: string, reason: string): Promise<void> {
   revalidatePath('/scripts')
 }
 
+export async function updateYoutubeTitle(id: string, title: string): Promise<void> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('scripts')
+    .update({ youtube_title: title })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/scripts')
+  revalidatePath('/media')
+}
+
 export async function updateScript(
   id: string,
   longFormText: string,
-  shortText: string
+  shortText: string,
+  youtubeTitle: string
 ): Promise<void> {
   const supabase = await createClient()
   const { error } = await supabase
     .from('scripts')
-    .update({ long_form_text: longFormText, short_text: shortText })
+    .update({ long_form_text: longFormText, short_text: shortText, youtube_title: youtubeTitle })
     .eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/scripts')

@@ -1,10 +1,8 @@
 """
 Reconciler: compares youtube_video_id values in the DB against the YouTube
-Data API to detect videos deleted from YouTube. Resets deleted rows so the
-assembler can re-queue them for assembly and re-upload.
+Data API to detect videos deleted from YouTube. Deletes those video rows and
+returns their scripts to the review queue for a full re-run of the pipeline.
 """
-
-from typing import Optional
 
 from supabase import Client, create_client
 
@@ -52,24 +50,17 @@ class Reconciler:
             print(f"[reconciler] videos.list failed: {e}")
             return set(video_ids)  # assume all live on error to avoid false resets
 
-    def _reset_deleted(self, video_ids: list[str]) -> None:
+    def _reset_deleted(self, deleted_rows: list[dict]) -> None:
+        video_db_ids = [r["id"] for r in deleted_rows]
+        script_ids = list({r["script_id"] for r in deleted_rows})
+
         execute_with_retry(
-            self._sb.table("videos")
-            .update({
-                "youtube_video_id": None,
-                "audio_path": None,
-                "srt_path": None,
-                "thumbnail_path": None,
-                "video_path": None,
-                "gate4_state": "pending",
-                "gate4_rejection_reason": None,
-                "gate5_state": "pending",
-                "gate5_rejection_reason": None,
-                "gate6_state": "pending",
-                "gate6_rejection_reason": None,
-                "status": "pending",
-            })
-            .in_("youtube_video_id", video_ids)
+            self._sb.table("videos").delete().in_("id", video_db_ids)
+        )
+        execute_with_retry(
+            self._sb.table("scripts")
+            .update({"gate3_state": "awaiting_review", "status": "approved"})
+            .in_("id", script_ids)
         )
 
     def run(self) -> None:
@@ -92,7 +83,7 @@ class Reconciler:
 
             db_videos = execute_with_retry(
                 self._sb.table("videos")
-                .select("id, youtube_video_id, video_type, scripts(youtube_title)")
+                .select("id, script_id, youtube_video_id, video_type, scripts(youtube_title)")
                 .eq("niche_id", niche["id"])
                 .not_.is_("youtube_video_id", "null")
             ).data
@@ -108,19 +99,18 @@ class Reconciler:
                 batch = yt_ids[i : i + BATCH_SIZE]
                 live_ids |= self._check_batch(yt, batch)
 
-            deleted = [vid for vid in yt_ids if vid not in live_ids]
-            if not deleted:
+            deleted_rows = [id_map[vid] for vid in yt_ids if vid not in live_ids]
+            if not deleted_rows:
                 print(f"[reconciler] {niche['name']}: all {len(yt_ids)} video(s) live")
                 continue
 
-            for yt_id in deleted:
-                row = id_map[yt_id]
+            for row in deleted_rows:
                 title = (row.get("scripts") or {}).get("youtube_title", "—")
-                print(f"[reconciler] DELETED  {niche['name']} | {row['video_type']} | {yt_id} | {title}")
+                print(f"[reconciler] DELETED  {niche['name']} | {row['video_type']} | {row['youtube_video_id']} | {title}")
 
-            self._reset_deleted(deleted)
-            total_reset += len(deleted)
-            print(f"[reconciler] {niche['name']}: reset {len(deleted)} deleted video(s) for re-assembly")
+            self._reset_deleted(deleted_rows)
+            total_reset += len(deleted_rows)
+            print(f"[reconciler] {niche['name']}: returned {len(deleted_rows)} video(s) to script queue")
 
         print(f"[reconciler] done — {total_reset} total video(s) reset")
 

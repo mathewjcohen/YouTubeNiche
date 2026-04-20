@@ -7,8 +7,7 @@ import type { PendingCounts } from '@/lib/types'
 const NAV_LINKS = [
   { href: '/', label: 'Home' },
   { href: '/niches', label: 'Niches', gateKey: 'gate1' as keyof PendingCounts },
-  { href: '/pipeline', label: 'Pipeline' },
-  { href: '/topics', label: 'Topic Queue', gateKey: 'gate2' as keyof PendingCounts },
+{ href: '/topics', label: 'Topic Queue', gateKey: 'gate2' as keyof PendingCounts },
   { href: '/scripts', label: 'Script Review', gateKey: 'gate3' as keyof PendingCounts },
   { href: '/media', label: 'Media Review', gateKey: null },
   { href: '/analytics', label: 'Analytics' },

@@ -20,9 +20,10 @@ export async function setRenderMethod(formData: FormData): Promise<void> {
   const method = formData.get('render_method') as string
   if (method !== 'github' && method !== 'aws') return
   const supabase = await createClient()
-  await supabase
+  const { error } = await supabase
     .from('app_settings')
     .upsert({ key: 'render_method', value: method }, { onConflict: 'key' })
+  if (error) throw new Error(error.message)
   revalidatePath('/settings')
 }
 

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { saveGateConfig, setRenderMethod, setPipelineEnabled } from '@/app/actions/settings'
 import { Form, SubmitButton } from '@/components/form'
+import { Collapsible } from '@/components/collapsible'
 import type { GateConfig, Niche } from '@/lib/types'
 
 const GATE_LABELS: Record<number, string> = {
@@ -83,38 +84,48 @@ export default async function SettingsPage() {
         </Form>
       </div>
 
-      <div className="space-y-6">
-        {scopes.map((scope) => (
-          <div key={scope.id ?? 'global'} className="bg-gray-800 border border-gray-700 rounded-lg p-5">
-            <h2 className="font-semibold mb-4 text-gray-100">{scope.label}</h2>
-            <Form action={saveGateConfig} successMessage="Gate config saved">
-              <input type="hidden" name="niche_id" value={scope.id ?? ''} />
-              <div className="grid grid-cols-3 gap-4 mb-4">
-                {[1, 2, 3, 4, 5, 6].map((gate) => {
-                  const enabled = getConfig(scope.id, gate)
-                  return (
-                    <label key={gate} className="flex items-center justify-between border border-gray-700 rounded p-3 hover:border-gray-600">
-                      <span className="text-sm text-gray-300">
-                        <span className="font-medium">Gate {gate}</span>
-                        <span className="text-gray-500 ml-1">— {GATE_LABELS[gate]}</span>
-                      </span>
-                      <input
-                        type="checkbox"
-                        name={`gate${gate}`}
-                        defaultChecked={enabled}
-                        value="on"
-                        className="w-4 h-4 accent-orange-500"
-                      />
-                    </label>
-                  )
-                })}
-              </div>
-              <SubmitButton className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500">
-                Save
-              </SubmitButton>
-            </Form>
-          </div>
-        ))}
+      <div className="space-y-3">
+        {scopes.map((scope) => {
+          const isGlobal = scope.id === null
+          return (
+            <div key={scope.id ?? 'global'} className="bg-gray-800 border border-gray-700 rounded-lg">
+              <Collapsible
+                defaultOpen={isGlobal}
+                className="p-5"
+                title={
+                  <h2 className="font-semibold text-gray-100">{scope.label}</h2>
+                }
+              >
+                <Form action={saveGateConfig} successMessage="Gate config saved" className="mt-4">
+                  <input type="hidden" name="niche_id" value={scope.id ?? ''} />
+                  <div className="grid grid-cols-3 gap-4 mb-4">
+                    {[1, 2, 3, 4, 5, 6].map((gate) => {
+                      const enabled = getConfig(scope.id, gate)
+                      return (
+                        <label key={gate} className="flex items-center justify-between border border-gray-700 rounded p-3 hover:border-gray-600">
+                          <span className="text-sm text-gray-300">
+                            <span className="font-medium">Gate {gate}</span>
+                            <span className="text-gray-500 ml-1">— {GATE_LABELS[gate]}</span>
+                          </span>
+                          <input
+                            type="checkbox"
+                            name={`gate${gate}`}
+                            defaultChecked={enabled}
+                            value="on"
+                            className="w-4 h-4 accent-orange-500"
+                          />
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <SubmitButton className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500">
+                    Save
+                  </SubmitButton>
+                </Form>
+              </Collapsible>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

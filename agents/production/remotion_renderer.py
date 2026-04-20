@@ -158,10 +158,12 @@ class RemotionRenderer:
         remotion_function_name = get_env("REMOTION_FUNCTION_NAME")
         remotion_serve_url = get_env("REMOTION_SERVE_URL")
 
-        # Pre-flight: list deployed remotion-prefixed functions so we can compare
-        # against REMOTION_FUNCTION_NAME if ResourceNotFoundException is raised.
+        # Pre-flight: show account concurrency limit and deployed function names.
         try:
             lambda_client = boto3.client("lambda", region_name=remotion_region, config=_BOTO_CONFIG)
+            account_settings = lambda_client.get_account_settings()
+            concurrency_limit = account_settings["AccountLimit"]["ConcurrentExecutions"]
+            print(f"[remotion] Lambda account concurrency limit in {remotion_region}: {concurrency_limit}")
             paginator = lambda_client.get_paginator("list_functions")
             deployed = [
                 fn["FunctionName"]
@@ -169,10 +171,10 @@ class RemotionRenderer:
                 for fn in page["Functions"]
                 if fn["FunctionName"].startswith("remotion")
             ]
-            print(f"[remotion] deployed remotion functions in {remotion_region}: {deployed}")
+            print(f"[remotion] deployed remotion functions: {deployed}")
             print(f"[remotion] REMOTION_FUNCTION_NAME = {remotion_function_name!r}")
         except Exception as _e:
-            print(f"[remotion] pre-flight list_functions failed (non-fatal): {_e}")
+            print(f"[remotion] pre-flight check failed (non-fatal): {_e}")
 
         from remotion_lambda import RemotionClient
         client = RemotionClient(
@@ -191,7 +193,7 @@ class RemotionRenderer:
                 },
                 codec="h264",
                 image_format="jpeg",
-                frames_per_lambda=240,  # 10s chunks at 24fps — limits concurrent invocations
+                frames_per_lambda=total_frames,  # single renderer Lambda — avoids concurrency throttle
                 concurrency_per_lambda=1,
             )
         )

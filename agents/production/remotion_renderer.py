@@ -154,11 +154,31 @@ class RemotionRenderer:
         scenes[-1]["durationFrames"] += total_frames - allocated
 
         # 3. Trigger Remotion Lambda render
+        remotion_region = get_env("REMOTION_REGION")
+        remotion_function_name = get_env("REMOTION_FUNCTION_NAME")
+        remotion_serve_url = get_env("REMOTION_SERVE_URL")
+
+        # Pre-flight: list deployed remotion-prefixed functions so we can compare
+        # against REMOTION_FUNCTION_NAME if ResourceNotFoundException is raised.
+        try:
+            lambda_client = boto3.client("lambda", region_name=remotion_region, config=_BOTO_CONFIG)
+            paginator = lambda_client.get_paginator("list_functions")
+            deployed = [
+                fn["FunctionName"]
+                for page in paginator.paginate()
+                for fn in page["Functions"]
+                if fn["FunctionName"].startswith("remotion")
+            ]
+            print(f"[remotion] deployed remotion functions in {remotion_region}: {deployed}")
+            print(f"[remotion] REMOTION_FUNCTION_NAME = {remotion_function_name!r}")
+        except Exception as _e:
+            print(f"[remotion] pre-flight list_functions failed (non-fatal): {_e}")
+
         from remotion_lambda import RemotionClient
         client = RemotionClient(
-            region=get_env("REMOTION_REGION"),
-            serve_url=get_env("REMOTION_SERVE_URL"),
-            function_name=get_env("REMOTION_FUNCTION_NAME"),
+            region=remotion_region,
+            serve_url=remotion_serve_url,
+            function_name=remotion_function_name,
         )
 
         render_response = client.render_media_on_lambda(

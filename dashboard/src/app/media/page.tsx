@@ -267,11 +267,18 @@ function ScriptGroupCard({ group }: { group: ScriptGroup }) {
                               </SubmitButton>
                             </Form>
                           ) : (
-                            <Form action={retryVideoAssembly.bind(null, v.id)} successMessage="Assembly retry queued">
-                              <SubmitButton className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
-                                Retry Assembly
-                              </SubmitButton>
-                            </Form>
+                            <>
+                              <Form action={retryVoiceover.bind(null, v.id)} successMessage="Voiceover retry queued">
+                                <SubmitButton className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
+                                  Retry Voiceover
+                                </SubmitButton>
+                              </Form>
+                              <Form action={retryVideoAssembly.bind(null, v.id)} successMessage="Assembly retry queued">
+                                <SubmitButton className="bg-blue-700 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-600">
+                                  Retry Assembly
+                                </SubmitButton>
+                              </Form>
+                            </>
                           )}
                         </div>
                       </div>

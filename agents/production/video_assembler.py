@@ -8,8 +8,8 @@ import PIL.Image
 if not hasattr(PIL.Image, "ANTIALIAS"):
     PIL.Image.ANTIALIAS = PIL.Image.LANCZOS  # removed in Pillow 10, moviepy 1.x needs it
 
+import boto3
 import requests
-from tusclient import client as tus_client
 from moviepy.editor import (
     VideoFileClip, AudioFileClip, concatenate_videoclips,
     CompositeVideoClip, ColorClip
@@ -63,8 +63,6 @@ class VideoAssembler:
     TARGET_HEIGHT = 1080
     FPS = 24
 
-    TUS_CHUNK_SIZE = 6 * 1024 * 1024  # 6 MB — Supabase recommended chunk size
-
     def __init__(
         self,
         supabase: Client,
@@ -73,34 +71,23 @@ class VideoAssembler:
         output_dir: str = "output/video",
     ):
         self._sb = supabase
-        self._supabase_url: str = str(supabase.supabase_url).rstrip("/")
-        self._supabase_key: str = supabase.supabase_key
         self._gate = gate_client
         self._pexels = pexels_client
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
 
     def _upload_video(self, file_path: Path, object_name: str) -> str:
-        """Upload a video to Supabase Storage via TUS resumable upload."""
-        tus_url = f"{self._supabase_url}/storage/v1/upload/resumable"
-        headers = {
-            "Authorization": f"Bearer {self._supabase_key}",
-            "x-upsert": "true",
-        }
-        metadata = {
-            "bucketName": "videos",
-            "objectName": object_name,
-            "contentType": "video/mp4",
-            "cacheControl": "3600",
-        }
-        tc = tus_client.TusClient(tus_url, headers=headers)
-        uploader = tc.uploader(
-            file_path=str(file_path),
-            chunk_size=self.TUS_CHUNK_SIZE,
-            metadata=metadata,
+        from agents.shared.config_loader import get_env
+        bucket = get_env("AWS_S3_BUCKET")
+        region = get_env("REMOTION_REGION")
+        s3 = boto3.client("s3", region_name=region)
+        s3.upload_file(
+            str(file_path),
+            bucket,
+            object_name,
+            ExtraArgs={"ContentType": "video/mp4"},
         )
-        uploader.upload()
-        return f"{self._supabase_url}/storage/v1/object/public/videos/{object_name}"
+        return f"https://{bucket}.s3.{region}.amazonaws.com/{object_name}"
 
     def assemble(
         self,
@@ -146,6 +133,7 @@ class VideoAssembler:
             video = video.subclip(0, min(total_duration, video.duration))
 
             out_path = self._output_dir / f"{output_stem}.mp4"
+            print(f"[assembler] encoding {output_stem} ({total_duration:.1f}s audio, {len(clips)} clips)…")
             video.write_videofile(
                 str(out_path),
                 fps=self.FPS,
@@ -155,7 +143,9 @@ class VideoAssembler:
                 remove_temp=True,
                 logger=None,
             )
+            print(f"[assembler] encode complete → {out_path}")
 
+        print(f"[assembler] uploading {out_path.name}…")
         return self._upload_video(out_path, out_path.name)
 
     def process_approved_voiceovers(self, niche_id: str) -> None:

@@ -8,7 +8,6 @@ import boto3
 import requests
 from botocore.config import Config as BotocoreConfig
 from supabase import Client
-from tusclient import client as tus_client
 
 from agents.shared.gate_client import GateClient
 from agents.shared.db_retry import execute_with_retry
@@ -91,34 +90,21 @@ except ImportError:
 
 
 class RemotionRenderer:
-    TUS_CHUNK_SIZE = 6 * 1024 * 1024  # 6 MB — Supabase recommended chunk size
-
     def __init__(self, supabase: Client, gate_client: GateClient):
         self._sb = supabase
-        self._supabase_url: str = str(supabase.supabase_url).rstrip("/")
-        self._supabase_key: str = supabase.supabase_key
         self._gate = gate_client
 
     def _upload_video(self, file_path: Path, object_name: str) -> str:
-        tus_url = f"{self._supabase_url}/storage/v1/upload/resumable"
-        headers = {
-            "Authorization": f"Bearer {self._supabase_key}",
-            "x-upsert": "true",
-        }
-        metadata = {
-            "bucketName": "videos",
-            "objectName": object_name,
-            "contentType": "video/mp4",
-            "cacheControl": "3600",
-        }
-        tc = tus_client.TusClient(tus_url, headers=headers)
-        uploader = tc.uploader(
-            file_path=str(file_path),
-            chunk_size=self.TUS_CHUNK_SIZE,
-            metadata=metadata,
+        bucket = get_env("AWS_S3_BUCKET")
+        region = get_env("REMOTION_REGION")
+        s3 = boto3.client("s3", region_name=region)
+        s3.upload_file(
+            str(file_path),
+            bucket,
+            object_name,
+            ExtraArgs={"ContentType": "video/mp4"},
         )
-        uploader.upload()
-        return f"{self._supabase_url}/storage/v1/object/public/videos/{object_name}"
+        return f"https://{bucket}.s3.{region}.amazonaws.com/{object_name}"
 
     def render(self, audio_url: str, script_text: str, output_stem: str) -> str:
         from remotion_lambda import RenderMediaParams

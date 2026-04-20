@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import boto3
 import requests as http_requests
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -63,12 +64,19 @@ class YouTubeUploader:
         self._yt: Optional[object] = None  # built lazily per niche
 
     def _fetch_to_tempfile(self, url: str, suffix: str) -> Path:
-        resp = http_requests.get(url, timeout=300)
-        resp.raise_for_status()
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-        tmp.write(resp.content)
         tmp.close()
-        return Path(tmp.name)
+        dest = Path(tmp.name)
+        if ".amazonaws.com/" in url:
+            bucket = os.environ.get("AWS_S3_BUCKET", "")
+            region = os.environ.get("REMOTION_REGION")
+            key = url.split(".amazonaws.com/", 1)[1]
+            boto3.client("s3", region_name=region).download_file(bucket, key, str(dest))
+        else:
+            resp = http_requests.get(url, timeout=300)
+            resp.raise_for_status()
+            dest.write_bytes(resp.content)
+        return dest
 
     def upload(
         self,
@@ -113,6 +121,18 @@ class YouTubeUploader:
             local_thumb.unlink(missing_ok=True)
 
         return video_id
+
+    def _delete_s3_video(self, video_path: str) -> None:
+        bucket = os.environ.get("AWS_S3_BUCKET")
+        region = os.environ.get("REMOTION_REGION")
+        if not bucket or ".amazonaws.com/" not in video_path:
+            return
+        key = video_path.split(".amazonaws.com/", 1)[1]
+        try:
+            boto3.client("s3", region_name=region).delete_object(Bucket=bucket, Key=key)
+            print(f"[uploader] deleted s3://{bucket}/{key}")
+        except Exception as e:
+            print(f"[uploader] s3 cleanup failed (non-fatal): {e}")
 
     def _build_service_for_niche(self, niche_id: str) -> bool:
         """Load per-niche token from Supabase. Returns False if no channel linked."""
@@ -175,6 +195,7 @@ class YouTubeUploader:
                         {"youtube_video_id": yt_id, "status": "uploaded"}
                     ).eq("id", video["id"])
                 )
+                self._delete_s3_video(video["video_path"])
                 print(f"[uploader] uploaded {yt_id} ({video['video_type']})")
             except Exception as e:
                 print(f"[uploader] failed for video {video['id']}: {e}")

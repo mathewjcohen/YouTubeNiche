@@ -29,6 +29,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - run: sudo apt-get install -y ffmpeg
       - run: pip install --retries 3 -r requirements.txt
       - name: Write YouTube token
         env:

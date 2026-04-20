@@ -9,7 +9,7 @@ STAGES = os.environ.get("PIPELINE_STAGES", "all")  # "fast" | "slow" | "all"
 
 def get_app_setting(sb: Client, key: str, default: str) -> str:
     rows = execute_with_retry(
-        sb.table("app_settings").select("value").eq("key", key).order("created_at", desc=True).limit(1)
+        sb.table("app_settings").select("value").eq("key", key).limit(1)
     ).data
     return rows[0]["value"] if rows else default
 

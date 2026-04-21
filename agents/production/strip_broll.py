@@ -6,6 +6,7 @@ Run: python3 -m agents.production.strip_broll
 """
 
 import re
+from typing import Optional
 from supabase import create_client
 
 from agents.shared.config_loader import get_env
@@ -14,7 +15,7 @@ from agents.shared.db_retry import execute_with_retry, patch_postgrest_http1
 _BROLL = re.compile(r'\[B-ROLL:.*?\]\n?', re.IGNORECASE | re.DOTALL)
 
 
-def _strip(text: str | None) -> str | None:
+def _strip(text: Optional[str]) -> Optional[str]:
     if not text:
         return text
     return re.sub(r'\n{3,}', '\n\n', _BROLL.sub('', text)).strip()

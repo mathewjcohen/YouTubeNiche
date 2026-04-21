@@ -1,4 +1,5 @@
 import io
+import random
 import textwrap
 from pathlib import Path
 from typing import Optional
@@ -61,19 +62,19 @@ def _load_font(candidates: list[str], size: int) -> ImageFont.FreeTypeFont:
 
 
 def _pexels_photo(query: str, api_key: str) -> Optional[Image.Image]:
-    """Fetch a landscape photo from Pexels and return as PIL Image, or None."""
+    """Fetch a landscape photo from Pexels and return as PIL Image, or None.
+    Fetches 5 candidates and picks randomly so retries get different images."""
     resp = requests.get(
         "https://api.pexels.com/v1/search",
         headers={"Authorization": api_key},
-        params={"query": query, "per_page": 1, "orientation": "landscape"},
+        params={"query": query, "per_page": 5, "orientation": "landscape"},
         timeout=15,
     )
     resp.raise_for_status()
     photos = resp.json().get("photos", [])
     if not photos:
         return None
-    src = photos[0]["src"]
-    # "large2x" is 1880px wide — plenty for 1280x720
+    src = random.choice(photos)["src"]
     img_url = src.get("large2x") or src.get("large") or src.get("original")
     img_resp = requests.get(img_url, timeout=30)
     img_resp.raise_for_status()
@@ -94,6 +95,12 @@ def _fit_crop(img: Image.Image, w: int, h: int) -> Image.Image:
     left = (new_w - w) // 2
     top = (new_h - h) // 2
     return img.crop((left, top, left + w, top + h))
+
+
+def _darken(img: Image.Image, factor: float = 0.5) -> Image.Image:
+    """Blend toward black to ensure text legibility on bright backgrounds."""
+    black = Image.new("RGB", img.size, (0, 0, 0))
+    return Image.blend(img, black, 1.0 - factor)
 
 
 def _apply_gradient(img: Image.Image) -> Image.Image:
@@ -147,6 +154,7 @@ class ThumbnailGenerator:
 
         if bg:
             img = _fit_crop(bg, w, h)
+            img = _darken(img)
             img = _apply_gradient(img)
         else:
             print(f"[thumbnail] No Pexels photo for '{title}' — using solid fallback")

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
-import { approveScript, rejectScript, updateScript } from '@/app/actions/scripts'
+import { approveScript, rejectScript, updateScript, deleteScript } from '@/app/actions/scripts'
 import type { Script } from '@/lib/types'
 
 export function ScriptReviewClient({ script }: { script: Script & { niches: { name: string } } }) {
@@ -9,6 +9,7 @@ export function ScriptReviewClient({ script }: { script: Script & { niches: { na
   const [short, setShort] = useState(script.short_text)
   const [title, setTitle] = useState(script.youtube_title ?? '')
   const [reason, setReason] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [pending, startTransition] = useTransition()
 
   const isDirty = longForm !== script.long_form_text || short !== script.short_text || title !== (script.youtube_title ?? '')
@@ -20,6 +21,15 @@ export function ScriptReviewClient({ script }: { script: Script & { niches: { na
       }
       await approveScript(script.id)
       toast.success('Script approved')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Something went wrong')
+    }
+  })
+
+  const nuke = () => startTransition(async () => {
+    try {
+      await deleteScript(script.id)
+      toast.success('Script deleted')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Something went wrong')
     }
@@ -97,6 +107,35 @@ export function ScriptReviewClient({ script }: { script: Script & { niches: { na
         >
           Reject
         </button>
+        <div className="ml-auto flex items-center gap-2">
+          {confirmDelete ? (
+            <>
+              <span className="text-xs text-red-400">Delete script + reject topic?</span>
+              <button
+                onClick={nuke}
+                disabled={pending}
+                className="bg-red-700 text-white px-3 py-2 rounded text-sm hover:bg-red-600 disabled:opacity-50"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                disabled={pending}
+                className="text-gray-400 px-3 py-2 rounded text-sm hover:text-gray-200"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              disabled={pending}
+              className="text-red-500 px-3 py-2 rounded text-sm hover:text-red-400 disabled:opacity-50"
+            >
+              Delete
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -325,24 +325,40 @@ class VoiceoverAgent:
                 audio_url = self._upload(audio_path, "audio/mpeg")
                 srt_url = self._upload(srt_path, "text/plain")
 
-                result = execute_with_retry(
-                    self._sb.table("videos").insert(
-                        {
-                            "script_id": script["id"],
-                            "niche_id": niche_id,
-                            "video_type": video_type,
-                            "audio_path": audio_url,
-                            "srt_path": srt_url,
-                            "status": "pending",
-                            "gate4_state": "pending",
-                            "gate6_state": "pending",
-                        }
+                try:
+                    result = execute_with_retry(
+                        self._sb.table("videos").insert(
+                            {
+                                "script_id": script["id"],
+                                "niche_id": niche_id,
+                                "video_type": video_type,
+                                "audio_path": audio_url,
+                                "srt_path": srt_url,
+                                "status": "pending",
+                                "gate4_state": "pending",
+                                "gate6_state": "pending",
+                            }
+                        )
                     )
-                )
-                if not result.data:
-                    print(f"[voiceover] insert returned no data for script {script['id']} ({video_type}), skip")
-                    continue
-                video_id = result.data[0]["id"]
+                    if not result.data:
+                        print(f"[voiceover] insert returned no data for script {script['id']} ({video_type}), skip")
+                        continue
+                    video_id = result.data[0]["id"]
+                except Exception as insert_exc:
+                    if "23505" not in str(insert_exc):
+                        raise
+                    print(f"[voiceover] video row already existed for {stem} (race/restart) — fetching existing")
+                    rows = execute_with_retry(
+                        self._sb.table("videos")
+                        .select("id")
+                        .eq("script_id", script["id"])
+                        .eq("video_type", video_type)
+                        .limit(1)
+                    ).data
+                    if not rows:
+                        print(f"[voiceover] could not find existing row for {stem}, skip")
+                        continue
+                    video_id = rows[0]["id"]
                 self._gate.advance_or_pause(
                     gate=GateNumber.VOICEOVER,
                     niche_id=niche_id,

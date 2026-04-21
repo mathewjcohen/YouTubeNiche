@@ -1,3 +1,4 @@
+import random
 import re
 import tempfile
 import urllib.request
@@ -138,6 +139,8 @@ class VideoAssembler:
 
             if not pool:
                 pool = [ColorClip(size=(target_w, target_h), color=(0, 0, 0), duration=5)]
+
+            random.shuffle(pool)
 
             # Cycle through pool clips until total_duration is filled
             timeline: List = []

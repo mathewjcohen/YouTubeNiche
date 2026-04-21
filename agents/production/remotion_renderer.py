@@ -1,4 +1,5 @@
 import math
+import random
 import re
 import time
 import tempfile
@@ -134,6 +135,8 @@ class RemotionRenderer:
 
         if not scenes:
             raise RuntimeError("No b-roll clips available — cannot render video")
+
+        random.shuffle(scenes)
 
         # Adjust last scene so total frames matches audio duration exactly
         total_frames = int(duration_sec * FPS)

@@ -132,7 +132,7 @@ class Scriptwriter:
         niche_name: str,
         niche_category: str,
     ) -> ScriptPair:
-        _broll = re.compile(r'\[B-ROLL:[^\]]*\]\n?', re.IGNORECASE)
+        _broll = re.compile(r'\[B-ROLL:.*?\]\n?', re.IGNORECASE | re.DOTALL)
 
         long_form = _broll.sub('', complete_sonnet(
             LONG_FORM_PROMPT.format(

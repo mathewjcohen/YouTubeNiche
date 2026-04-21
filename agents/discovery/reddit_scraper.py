@@ -105,12 +105,26 @@ def main():
         posts = scraper.deduplicate(posts, known_ids)
         print(f"[reddit] {niche['name']}: {len(posts)} posts after dedup, processing up to 10")
         for post in posts[:10]:
-            score_prompt = f"Rate this Reddit post for YouTube video potential (1-10). Title: {post.title}\nBody excerpt: {post.body[:300]}\nReturn only the integer score."
+            score_prompt = (
+                f"Rate this Reddit post for YouTube video potential. Score 1-10 using these criteria:\n"
+                f"- Clear story arc with conflict and resolution (not just a question or rant)\n"
+                f"- Outcome is surprising, instructive, or emotionally compelling\n"
+                f"- General audience would care, not just niche Reddit insiders\n"
+                f"- Enough detail to sustain a 10-12 minute video\n"
+                f"- Evergreen (not a breaking news moment that expires in days)\n\n"
+                f"Title: {post.title}\n"
+                f"Body excerpt: {post.body[:300]}\n\n"
+                f"Return only the integer score."
+            )
             try:
                 score_str = complete(score_prompt, model="claude-haiku-4-5-20251001", max_tokens=10)
                 claude_score = float(score_str.strip())
             except Exception:
                 claude_score = 5.0
+
+            if claude_score < 7:
+                print(f"[reddit] skipped (score {claude_score}): {post.title[:60]}")
+                continue
 
             result = execute_with_retry(sb.table("topics").insert({
                 "niche_id": niche["id"],

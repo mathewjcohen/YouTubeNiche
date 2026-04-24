@@ -118,14 +118,14 @@ class AnalyticsPoller:
     def run(self) -> None:
         testing_niches = execute_with_retry(
             self._sb.table("niches")
-            .select("*")
+            .select("*, youtube_accounts(channel_id)")
             .eq("status", "testing")
         ).data
         for niche in testing_niches:
-            brand = niche.get("brand_package") or {}
-            channel_id = brand.get("channel_id")
+            account = niche.get("youtube_accounts") or {}
+            channel_id = account.get("channel_id")
             if not channel_id:
-                print(f"[analytics] niche {niche['name']} has no channel_id in brand_package, skip")
+                print(f"[analytics] niche {niche['name']} has no linked YouTube channel, skip")
                 continue
 
             perf = self.poll_niche(niche["id"], channel_id)

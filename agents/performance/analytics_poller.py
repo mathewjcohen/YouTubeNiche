@@ -53,34 +53,26 @@ class AnalyticsPoller:
         self._yt = build_youtube_service()
         self._analytics = build("youtubeAnalytics", "v2", credentials=self._yt._http.credentials)
 
-    def _fetch_video_counts(self, niche_id: str, channel_id: str) -> tuple[int, int]:
-        """Returns (total_from_youtube, shorts_from_db). Longs = total - shorts."""
-        total = 0
-        try:
-            result = self._yt.channels().list(part="statistics", id=channel_id).execute()
-            items = result.get("items", [])
-            if items:
-                total = int(items[0].get("statistics", {}).get("videoCount", 0))
-        except Exception as e:
-            print(f"[analytics] channels.list failed for {niche_id}: {e}")
-
-        shorts = 0
-        try:
-            resp = execute_with_retry(
-                self._sb.table("videos")
-                .select("id", count="exact")
-                .eq("niche_id", niche_id)
-                .eq("video_type", "short")
-                .not_.is_("youtube_video_id", "null")
-            )
-            shorts = resp.count or 0
-        except Exception as e:
-            print(f"[analytics] shorts count query failed for {niche_id}: {e}")
-
-        return total, shorts
+    def _fetch_published_videos(self, niche_id: str) -> tuple[list[str], int, int]:
+        """Returns (video_ids, longs_count, shorts_count) for published videos."""
+        rows = execute_with_retry(
+            self._sb.table("videos")
+            .select("youtube_video_id, video_type")
+            .eq("niche_id", niche_id)
+            .not_.is_("youtube_video_id", "null")
+        ).data
+        video_ids = [r["youtube_video_id"] for r in rows]
+        longs = sum(1 for r in rows if r["video_type"] == "long")
+        shorts = sum(1 for r in rows if r["video_type"] == "short")
+        return video_ids, longs, shorts
 
     def poll_niche(self, niche_id: str, channel_id: str) -> Optional[NichePerformance]:
         try:
+            video_ids, longs_published, shorts_published = self._fetch_published_videos(niche_id)
+            if not video_ids:
+                print(f"[analytics] niche {niche_id} has no published videos, skip")
+                return None
+
             end_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             start_date = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
             result = self._analytics.reports().query(
@@ -89,18 +81,19 @@ class AnalyticsPoller:
                 endDate=end_date,
                 metrics="views,estimatedMinutesWatched,averageViewDuration",
                 dimensions="day",
+                filters=f"video=={','.join(video_ids)}",
             ).execute()
             rows = result.get("rows", [])
-            if not rows or len(rows[0]) < 4:
-                return None
+            if not rows:
+                return NichePerformance(views_total=0, avg_watch_time_pct=0.0,
+                                        videos_published=longs_published, shorts_published=shorts_published)
             total_views = sum(int(r[1]) for r in rows)
             avg_view_dur = sum(float(r[3]) for r in rows) / len(rows)
             watch_pct = min(avg_view_dur / 480, 1.0)
-            total_published, shorts_published = self._fetch_video_counts(niche_id, channel_id)
             return NichePerformance(
                 views_total=total_views,
                 avg_watch_time_pct=watch_pct,
-                videos_published=max(0, total_published - shorts_published),
+                videos_published=longs_published,
                 shorts_published=shorts_published,
             )
         except Exception as e:

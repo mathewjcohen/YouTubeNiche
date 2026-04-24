@@ -11,23 +11,19 @@ from agents.production.uploader import build_youtube_service
 
 # Promotion thresholds (at 60-day review)
 PROMOTE_MIN_VIEWS = 50
-PROMOTE_MIN_CTR = 0.03
 PROMOTE_MIN_WATCH_TIME = 0.35
 
-# Archive: all three thresholds must be missed
+# Archive: both thresholds must be missed
 ARCHIVE_MAX_VIEWS = 50
-ARCHIVE_MAX_CTR = 0.03
 ARCHIVE_MAX_WATCH_TIME = 0.35
 
 # Early promotion flag
 EARLY_VIEWS_THRESHOLD = 200
-EARLY_CTR_THRESHOLD = 0.05
 
 
 @dataclass
 class NichePerformance:
     views_total: int
-    ctr: float
     avg_watch_time_pct: float
     videos_published: int = 0
     shorts_published: int = 0
@@ -36,7 +32,6 @@ class NichePerformance:
 def should_promote(perf: NichePerformance) -> bool:
     return (
         perf.views_total >= PROMOTE_MIN_VIEWS
-        and perf.ctr >= PROMOTE_MIN_CTR
         and perf.avg_watch_time_pct >= PROMOTE_MIN_WATCH_TIME
     )
 
@@ -44,13 +39,12 @@ def should_promote(perf: NichePerformance) -> bool:
 def should_archive(perf: NichePerformance) -> bool:
     return (
         perf.views_total < ARCHIVE_MAX_VIEWS
-        and perf.ctr < ARCHIVE_MAX_CTR
         and perf.avg_watch_time_pct < ARCHIVE_MAX_WATCH_TIME
     )
 
 
 def should_flag_early(perf: NichePerformance) -> bool:
-    return perf.views_total >= EARLY_VIEWS_THRESHOLD and perf.ctr >= EARLY_CTR_THRESHOLD
+    return perf.views_total >= EARLY_VIEWS_THRESHOLD
 
 
 class AnalyticsPoller:
@@ -93,20 +87,18 @@ class AnalyticsPoller:
                 ids=f"channel=={channel_id}",
                 startDate=start_date,
                 endDate=end_date,
-                metrics="views,estimatedMinutesWatched,averageViewDuration,clickThroughRate",
+                metrics="views,estimatedMinutesWatched,averageViewDuration",
                 dimensions="day",
             ).execute()
             rows = result.get("rows", [])
-            if not rows or len(rows[0]) < 5:
+            if not rows or len(rows[0]) < 4:
                 return None
             total_views = sum(int(r[1]) for r in rows)
-            avg_ctr = sum(float(r[4]) for r in rows) / len(rows) / 100
             avg_view_dur = sum(float(r[3]) for r in rows) / len(rows)
             watch_pct = min(avg_view_dur / 480, 1.0)
             total_published, shorts_published = self._fetch_video_counts(niche_id, channel_id)
             return NichePerformance(
                 views_total=total_views,
-                ctr=avg_ctr,
                 avg_watch_time_pct=watch_pct,
                 videos_published=max(0, total_published - shorts_published),
                 shorts_published=shorts_published,
@@ -136,7 +128,6 @@ class AnalyticsPoller:
                 {
                     "niche_id": niche["id"],
                     "views_total": perf.views_total,
-                    "ctr": perf.ctr,
                     "avg_watch_time_pct": perf.avg_watch_time_pct,
                     "early_promotion_flagged": should_flag_early(perf),
                     "videos_published": perf.videos_published,
@@ -157,7 +148,7 @@ class AnalyticsPoller:
                         print(f"[analytics] ARCHIVED: {niche['name']}")
 
             if should_flag_early(perf):
-                print(f"[analytics] EARLY FLAG: {niche['name']} — {perf.views_total} views, CTR {perf.ctr:.1%}")
+                print(f"[analytics] EARLY FLAG: {niche['name']} — {perf.views_total} views")
 
 
 def main():

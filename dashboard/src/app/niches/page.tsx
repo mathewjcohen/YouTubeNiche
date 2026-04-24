@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { StatusPill } from '@/components/status-pill'
 import { ScoreTooltip } from '@/components/score-tooltip'
 import { Form, SubmitButton } from '@/components/form'
-import { activateNiche, dismissNiche, archiveNiche, submitManualNiche } from '@/app/actions/niches'
+import { activateNiche, dismissNiche, archiveNiche, promoteNiche, submitManualNiche } from '@/app/actions/niches'
 import type { Niche, NicheStatus } from '@/lib/types'
 
 const CATEGORIES = [
@@ -120,11 +120,18 @@ function NicheRow({ niche }: { niche: Niche }) {
           </>
         )}
         {niche.status === 'testing' && (
-          <Form action={archiveNiche.bind(null, niche.id)} successMessage="Niche archived">
-            <SubmitButton className="text-red-400 text-xs px-3 py-1.5 rounded hover:bg-red-900/30">
-              Archive
-            </SubmitButton>
-          </Form>
+          <>
+            <Form action={promoteNiche.bind(null, niche.id)} successMessage="Niche promoted">
+              <SubmitButton className="text-green-400 text-xs px-3 py-1.5 rounded hover:bg-green-900/30">
+                Promote
+              </SubmitButton>
+            </Form>
+            <Form action={archiveNiche.bind(null, niche.id)} successMessage="Niche archived">
+              <SubmitButton className="text-red-400 text-xs px-3 py-1.5 rounded hover:bg-red-900/30">
+                Archive
+              </SubmitButton>
+            </Form>
+          </>
         )}
       </div>
     </div>

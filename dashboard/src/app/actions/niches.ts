@@ -22,6 +22,16 @@ export async function dismissNiche(id: string): Promise<void> {
   revalidatePath('/niches')
 }
 
+export async function promoteNiche(id: string): Promise<void> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('niches')
+    .update({ status: 'promoted' })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/niches')
+}
+
 export async function archiveNiche(id: string): Promise<void> {
   const supabase = await createClient()
   const { error } = await supabase

@@ -199,6 +199,8 @@ class YouTubeUploader:
         ).data
         if not account_rows:
             return False
+        channel_id = account_rows[0]["channel_id"]
+        print(f"[uploader] niche {niche_id} → channel {channel_id}")
         token_dict = account_rows[0]["token_json"]
         self._yt = build_youtube_service(token_dict=token_dict)
         # Persist refreshed token back to Supabase

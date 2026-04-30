@@ -53,7 +53,16 @@ class AnalyticsPoller:
 
     def _build_analytics_service(self, token_dict: dict):
         yt = build_youtube_service(token_dict=token_dict)
-        return build("youtubeAnalytics", "v2", credentials=yt._http.credentials)
+        creds = yt._http.credentials
+        print(f"[analytics] token scopes: {getattr(creds, 'scopes', 'unknown')}")
+        try:
+            resp = yt.channels().list(part="id", mine=True).execute()
+            items = resp.get("items", [])
+            resolved = items[0]["id"] if items else "none"
+            print(f"[analytics] token resolves to channel: {resolved}")
+        except Exception as e:
+            print(f"[analytics] channel resolution check failed: {e}")
+        return build("youtubeAnalytics", "v2", credentials=creds)
 
     def _fetch_published_videos(self, niche_id: str) -> tuple[list[str], int, int]:
         """Returns (video_ids, longs_count, shorts_count) for published videos."""
@@ -77,7 +86,7 @@ class AnalyticsPoller:
         end_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         start_date = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
         result = analytics_service.reports().query(
-            ids=f"channel=={channel_id}",
+            ids="channel==MINE",
             startDate=start_date,
             endDate=end_date,
             metrics="views,estimatedMinutesWatched,averageViewDuration",

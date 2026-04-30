@@ -124,6 +124,7 @@ class AnalyticsPoller:
                 continue
 
             try:
+                print(f"[analytics] polling: {niche['name']} ({niche['status']})")
                 analytics = self._build_analytics_service(token_json)
                 perf = self.poll_niche(niche["id"], channel_id, analytics)
                 if not perf:
@@ -142,7 +143,7 @@ class AnalyticsPoller:
 
                 activated_at = niche.get("activated_at")
                 if activated_at:
-                    activated = datetime.fromisoformat(activated_at.replace("Z", "+00:00"))
+                    activated = datetime.fromisoformat(activated_at[:19] + "+00:00")
                     days_active = (datetime.now(timezone.utc) - activated).days
                     if days_active >= 60:
                         if should_promote(perf):

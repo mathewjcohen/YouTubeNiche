@@ -108,15 +108,14 @@ class AnalyticsPoller:
         )
 
     def run(self) -> None:
-        testing_niches = execute_with_retry(
+        active_niches = execute_with_retry(
             self._sb.table("niches")
             .select("*, youtube_accounts(channel_id, token_json)")
-            .eq("status", "testing")
+            .in_("status", ["testing", "promoted"])
         ).data
 
-        # Always upload longs before shorts so the link is available
         failures = []
-        for niche in testing_niches:
+        for niche in active_niches:
             account = niche.get("youtube_accounts") or {}
             channel_id = account.get("channel_id")
             token_json = account.get("token_json")

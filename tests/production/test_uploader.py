@@ -44,3 +44,63 @@ def test_upload_raises_on_missing_file(uploader):
             tags=[],
             is_short=False,
         )
+
+
+BASE_URL = "https://project.supabase.co/storage/v1/object/public"
+
+
+def _make_video(video_id: str = "abcdef12345678", video_type: str = "long") -> dict:
+    return {
+        "id": video_id,
+        "video_type": video_type,
+        "audio_path": f"{BASE_URL}/voiceovers/{video_id[:8]}_{video_type}.mp3",
+        "srt_path": f"{BASE_URL}/voiceovers/{video_id[:8]}_{video_type}.srt",
+        "thumbnail_path": f"{BASE_URL}/thumbnails/{video_id[:8]}_{video_type}_thumb.jpg",
+        "video_path": f"https://mybucket.s3.us-east-1.amazonaws.com/{video_id[:8]}_{video_type}_remotion.mp4",
+    }
+
+
+def test_delete_supabase_assets_removes_voiceover_and_thumbnail(uploader):
+    storage = uploader._sb.storage
+    storage.from_.return_value.list.return_value = []
+
+    uploader._delete_supabase_assets(_make_video())
+
+    remove_calls = [call.args[0] for call in storage.from_.return_value.remove.call_args_list]
+    assert ["abcdef12_long.mp3"] in remove_calls
+    assert ["abcdef12_long.srt"] in remove_calls
+    assert ["abcdef12_long_thumb.jpg"] in remove_calls
+
+
+def test_delete_supabase_assets_removes_broll_clips(uploader):
+    vid = _make_video()
+    prefix = f"broll_{vid['id'][:8]}_{vid['video_type']}_remotion_"
+    broll_files = [
+        {"name": f"{prefix}0.mp4"},
+        {"name": f"{prefix}1.mp4"},
+        {"name": f"{prefix}2.mp4"},
+    ]
+    storage = uploader._sb.storage
+    storage.from_.return_value.list.return_value = broll_files
+
+    uploader._delete_supabase_assets(vid)
+
+    remove_calls = [call.args[0] for call in storage.from_.return_value.remove.call_args_list]
+    assert [f"{prefix}0.mp4", f"{prefix}1.mp4", f"{prefix}2.mp4"] in remove_calls
+
+
+def test_delete_supabase_assets_skips_missing_urls(uploader):
+    storage = uploader._sb.storage
+    storage.from_.return_value.list.return_value = []
+
+    uploader._delete_supabase_assets({"id": "abcdef12345678", "video_type": "long"})
+
+    storage.from_.return_value.remove.assert_not_called()
+
+
+def test_delete_supabase_assets_is_nonfatal_on_error(uploader):
+    storage = uploader._sb.storage
+    storage.from_.return_value.remove.side_effect = Exception("storage error")
+    storage.from_.return_value.list.return_value = []
+
+    uploader._delete_supabase_assets(_make_video())

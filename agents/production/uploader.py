@@ -125,6 +125,47 @@ class YouTubeUploader:
 
         return video_id
 
+    def _delete_supabase_assets(self, video: dict) -> None:
+        """Delete voiceover, SRT, thumbnail, and b-roll from Supabase Storage."""
+
+        def _remove(bucket: str, keys: List[str]) -> None:
+            if not keys:
+                return
+            try:
+                self._sb.storage.from_(bucket).remove(keys)
+                for k in keys:
+                    print(f"[uploader] deleted {bucket}/{k}")
+            except Exception as e:
+                print(f"[uploader] {bucket} cleanup failed (non-fatal): {e}")
+
+        def _key_from_url(url: Optional[str], bucket: str) -> Optional[str]:
+            if not url:
+                return None
+            marker = f"/{bucket}/"
+            idx = url.find(marker)
+            return url[idx + len(marker):] if idx != -1 else None
+
+        for field in ("audio_path", "srt_path"):
+            key = _key_from_url(video.get(field), "voiceovers")
+            if key:
+                _remove("voiceovers", [key])
+
+        key = _key_from_url(video.get("thumbnail_path"), "thumbnails")
+        if key:
+            _remove("thumbnails", [key])
+
+        # B-roll count varies with number of [BROLL:] tags in the script — discover by prefix
+        video_id = video.get("id", "")
+        video_type = video.get("video_type", "")
+        if video_id and video_type:
+            prefix = f"broll_{video_id[:8]}_{video_type}_remotion_"
+            try:
+                items = self._sb.storage.from_("broll").list("", {"search": prefix})
+                keys = [item["name"] for item in (items or []) if item.get("name", "").startswith(prefix)]
+                _remove("broll", keys)
+            except Exception as e:
+                print(f"[uploader] broll list failed (non-fatal): {e}")
+
     def _delete_s3_video(self, video_path: str) -> None:
         bucket = os.environ.get("AWS_S3_BUCKET")
         region = os.environ.get("REMOTION_REGION")
@@ -234,6 +275,7 @@ class YouTubeUploader:
                     ).eq("id", video["id"])
                 )
                 self._delete_s3_video(video["video_path"])
+                self._delete_supabase_assets(video)
                 print(f"[uploader] uploaded {yt_id} ({video['video_type']})")
             except Exception as e:
                 print(f"[uploader] failed for video {video['id']}: {e}")

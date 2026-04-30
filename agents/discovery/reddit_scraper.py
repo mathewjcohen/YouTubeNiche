@@ -38,7 +38,7 @@ class RedditScraper:
         self,
         subreddit: str,
         min_body_length: int = 300,
-        limit: int = 25,
+        limit: int = 50,
         timeframe: str = "week",
     ) -> List[RedditPost]:
         url = f"https://www.reddit.com/r/{subreddit}/top.rss"
@@ -103,8 +103,8 @@ def main():
         posts = scraper.fetch_all_for_niche(subs)
         print(f"[reddit] {niche['name']}: {len(posts)} posts before dedup")
         posts = scraper.deduplicate(posts, known_ids)
-        print(f"[reddit] {niche['name']}: {len(posts)} posts after dedup, processing up to 10")
-        for post in posts[:10]:
+        print(f"[reddit] {niche['name']}: {len(posts)} posts after dedup, processing up to 25")
+        for post in posts[:25]:
             score_prompt = (
                 f"Rate this Reddit post for YouTube video potential. Score 1-10 using these criteria:\n"
                 f"- Clear story arc with conflict and resolution (not just a question or rant)\n"
@@ -122,7 +122,7 @@ def main():
             except Exception:
                 claude_score = 5.0
 
-            if claude_score < 7:
+            if claude_score < 6:
                 print(f"[reddit] skipped (score {claude_score}): {post.title[:60]}")
                 continue
 

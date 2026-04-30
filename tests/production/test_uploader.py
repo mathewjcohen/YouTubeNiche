@@ -98,9 +98,10 @@ def test_delete_supabase_assets_skips_missing_urls(uploader):
     storage.from_.return_value.remove.assert_not_called()
 
 
-def test_delete_supabase_assets_is_nonfatal_on_error(uploader):
+def test_delete_supabase_assets_raises_on_error(uploader):
     storage = uploader._sb.storage
     storage.from_.return_value.remove.side_effect = Exception("storage error")
     storage.from_.return_value.list.return_value = []
 
-    uploader._delete_supabase_assets(_make_video())
+    with pytest.raises(Exception, match="storage error"):
+        uploader._delete_supabase_assets(_make_video())

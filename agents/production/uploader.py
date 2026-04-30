@@ -136,7 +136,8 @@ class YouTubeUploader:
                 for k in keys:
                     print(f"[uploader] deleted {bucket}/{k}")
             except Exception as e:
-                print(f"[uploader] {bucket} cleanup failed (non-fatal): {e}")
+                print(f"[uploader] {bucket} cleanup FAILED — video record: {video}")
+                raise
 
         def _key_from_url(url: Optional[str], bucket: str) -> Optional[str]:
             if not url:
@@ -164,7 +165,8 @@ class YouTubeUploader:
                 keys = [item["name"] for item in (items or []) if item.get("name", "").startswith(prefix)]
                 _remove("broll", keys)
             except Exception as e:
-                print(f"[uploader] broll list failed (non-fatal): {e}")
+                print(f"[uploader] broll list FAILED — video record: {video}")
+                raise
 
     def _delete_s3_video(self, video_path: str) -> None:
         bucket = os.environ.get("AWS_S3_BUCKET")

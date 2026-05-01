@@ -105,3 +105,76 @@ def test_delete_supabase_assets_raises_on_error(uploader):
 
     with pytest.raises(Exception, match="storage error"):
         uploader._delete_supabase_assets(_make_video())
+
+
+def test_get_long_yt_id_reads_from_published_videos(uploader):
+    from agents.shared.db_retry import execute_with_retry
+
+    execute_mock = MagicMock()
+    execute_mock.data = [{"youtube_video_id": "yt-long-abc"}]
+
+    with patch("agents.production.uploader.execute_with_retry", return_value=execute_mock):
+        result = uploader._get_long_yt_id("script-uuid-123")
+
+    assert result == "yt-long-abc"
+    # Verify it queried published_videos, not videos
+    call = uploader._sb.table.call_args_list[-1]
+    assert call.args[0] == "published_videos"
+
+
+def test_get_long_yt_id_returns_none_when_not_found(uploader):
+    execute_mock = MagicMock()
+    execute_mock.data = []
+
+    with patch("agents.production.uploader.execute_with_retry", return_value=execute_mock):
+        result = uploader._get_long_yt_id("script-uuid-456")
+
+    assert result is None
+
+
+def test_process_approved_videos_inserts_published_and_deletes_row(uploader):
+    niche_id = "niche-uuid-001"
+    video_id = "video-uuid-001"
+    script_id = "script-uuid-001"
+
+    video = {
+        "id": video_id,
+        "script_id": script_id,
+        "niche_id": niche_id,
+        "video_type": "long",
+        "video_path": "https://bucket.s3.us-east-1.amazonaws.com/test.mp4",
+        "thumbnail_path": "https://project.supabase.co/storage/v1/object/public/thumbnails/test.jpg",
+        "audio_path": None,
+        "srt_path": None,
+        "gate6_state": "approved",
+        "status": "approved",
+        "scripts": {
+            "youtube_title": "Test Title",
+            "youtube_description": "Test desc",
+            "youtube_tags": [],
+        },
+    }
+
+    # Mock DB calls
+    uploader._sb.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value.data = [video]
+    uploader._build_service_for_niche = MagicMock(return_value=True)
+
+    with patch("agents.production.uploader.execute_with_retry") as mock_exec:
+        calls = []
+
+        def track_exec(q):
+            calls.append(q)
+            result = MagicMock()
+            # Return video data on first call (the fetch), empty on subsequent calls
+            result.data = [video] if len(calls) == 1 else []
+            return result
+
+        mock_exec.side_effect = track_exec
+
+        with patch.object(uploader, "upload", return_value="yt-new-id"):
+            with patch.object(uploader, "_delete_s3_video"):
+                with patch.object(uploader, "_delete_supabase_assets"):
+                    uploader.process_approved_videos(niche_id)
+
+    # Should have called execute_with_retry for: fetch videos, insert published_videos, delete videos row
+    assert mock_exec.call_count >= 3

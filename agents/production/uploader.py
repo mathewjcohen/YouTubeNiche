@@ -215,11 +215,10 @@ class YouTubeUploader:
     def _get_long_yt_id(self, script_id: str) -> Optional[str]:
         """Return the youtube_video_id of the uploaded long-form video for a script, if any."""
         rows = execute_with_retry(
-            self._sb.table("videos")
+            self._sb.table("published_videos")
             .select("youtube_video_id")
             .eq("script_id", script_id)
             .eq("video_type", "long")
-            .not_.is_("youtube_video_id", "null")
             .limit(1)
         ).data
         return rows[0]["youtube_video_id"] if rows else None
@@ -274,9 +273,15 @@ class YouTubeUploader:
                     long_yt_ids[video["script_id"]] = yt_id
 
                 execute_with_retry(
-                    self._sb.table("videos").update(
-                        {"youtube_video_id": yt_id, "status": "uploaded"}
-                    ).eq("id", video["id"])
+                    self._sb.table("published_videos").insert({
+                        "niche_id": niche_id,
+                        "script_id": video["script_id"],
+                        "youtube_video_id": yt_id,
+                        "video_type": video["video_type"],
+                    })
+                )
+                execute_with_retry(
+                    self._sb.table("videos").delete().eq("id", video["id"])
                 )
                 self._delete_s3_video(video["video_path"])
                 self._delete_supabase_assets(video)

@@ -77,13 +77,34 @@ def test_poll_niche_raises_on_api_error():
             poller.poll_niche("niche-1", "UCxxx", mock_analytics)
 
 
+def test_fetch_published_videos_queries_published_videos_table():
+    mock_sb = MagicMock()
+    execute_mock = MagicMock()
+    execute_mock.data = [
+        {"youtube_video_id": "vid-long-1", "video_type": "long"},
+        {"youtube_video_id": "vid-short-1", "video_type": "short"},
+    ]
+
+    poller = AnalyticsPoller(supabase=mock_sb)
+
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr("agents.performance.analytics_poller.execute_with_retry", lambda q: execute_mock)
+        ids, longs, shorts = poller._fetch_published_videos("niche-1")
+
+    assert ids == ["vid-long-1", "vid-short-1"]
+    assert longs == 1
+    assert shorts == 1
+    # Verify correct table
+    assert mock_sb.table.call_args.args[0] == "published_videos"
+
+
 def test_run_raises_after_all_niches_attempted_on_partial_failure():
     mock_sb = MagicMock()
     niche_data = MagicMock()
     niche_data.data = [
-        {"id": "niche-good", "name": "Good", "activated_at": None,
+        {"id": "niche-good", "name": "Good", "status": "testing", "activated_at": None,
          "youtube_accounts": {"channel_id": "UCgood", "token_json": {"token": "good"}}},
-        {"id": "niche-bad", "name": "Bad", "activated_at": None,
+        {"id": "niche-bad", "name": "Bad", "status": "testing", "activated_at": None,
          "youtube_accounts": {"channel_id": "UCbad", "token_json": {"token": "bad"}}},
     ]
 

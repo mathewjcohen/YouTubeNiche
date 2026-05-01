@@ -67,10 +67,9 @@ class AnalyticsPoller:
     def _fetch_published_videos(self, niche_id: str) -> tuple[list[str], int, int]:
         """Returns (video_ids, longs_count, shorts_count) for published videos."""
         rows = execute_with_retry(
-            self._sb.table("videos")
+            self._sb.table("published_videos")
             .select("youtube_video_id, video_type")
             .eq("niche_id", niche_id)
-            .not_.is_("youtube_video_id", "null")
         ).data
         video_ids = [r["youtube_video_id"] for r in rows]
         longs = sum(1 for r in rows if r["video_type"] == "long")

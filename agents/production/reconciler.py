@@ -60,7 +60,7 @@ class Reconciler:
         needs_reset = [r for r in deleted_rows if r["script_id"] not in live_script_ids]
 
         execute_with_retry(
-            self._sb.table("videos").delete().in_("id", [r["id"] for r in deleted_rows])
+            self._sb.table("published_videos").delete().in_("id", [r["id"] for r in deleted_rows])
         )
 
         if orphans:
@@ -97,10 +97,9 @@ class Reconciler:
                 continue
 
             db_videos = execute_with_retry(
-                self._sb.table("videos")
-                .select("id, script_id, youtube_video_id, video_type, scripts(youtube_title)")
+                self._sb.table("published_videos")
+                .select("id, script_id, youtube_video_id, video_type")
                 .eq("niche_id", niche["id"])
-                .not_.is_("youtube_video_id", "null")
             ).data
 
             if not db_videos:
@@ -120,8 +119,7 @@ class Reconciler:
                 continue
 
             for row in deleted_rows:
-                title = (row.get("scripts") or {}).get("youtube_title", "—")
-                print(f"[reconciler] DELETED  {niche['name']} | {row['video_type']} | {row['youtube_video_id']} | {title}")
+                print(f"[reconciler] DELETED  {niche['name']} | {row['video_type']} | {row['youtube_video_id']}")
 
             self._reset_deleted(deleted_rows, db_videos, live_ids)
             total_reset += len(deleted_rows)

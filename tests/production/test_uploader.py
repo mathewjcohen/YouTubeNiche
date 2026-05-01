@@ -176,5 +176,5 @@ def test_process_approved_videos_inserts_published_and_deletes_row(uploader):
                 with patch.object(uploader, "_delete_supabase_assets"):
                     uploader.process_approved_videos(niche_id)
 
-    # Should have called execute_with_retry for: fetch videos, insert published_videos, delete videos row
-    assert mock_exec.call_count >= 3
+    # Should have called execute_with_retry for: fetch videos, update status, insert published_videos, delete videos row
+    assert mock_exec.call_count >= 4

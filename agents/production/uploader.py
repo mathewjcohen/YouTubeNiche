@@ -273,6 +273,9 @@ class YouTubeUploader:
                     long_yt_ids[video["script_id"]] = yt_id
 
                 execute_with_retry(
+                    self._sb.table("videos").update({"status": "uploaded"}).eq("id", video["id"])
+                )
+                execute_with_retry(
                     self._sb.table("published_videos").insert({
                         "niche_id": niche_id,
                         "script_id": video["script_id"],

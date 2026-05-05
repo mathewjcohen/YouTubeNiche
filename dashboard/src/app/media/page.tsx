@@ -66,7 +66,9 @@ function groupByScript(videos: VideoRow[]): ScriptGroup[] {
     nicheName: group[0].niches?.name ?? '',
     longThumbnail: group.find((v) => v.video_type === 'long' && v.thumbnail_path?.startsWith('http'))?.thumbnail_path,
     shortThumbnail: group.find((v) => v.video_type === 'short' && v.thumbnail_path?.startsWith('http'))?.thumbnail_path,
-    showGate5: group.some((v) => v.gate5_state === 'awaiting_review' || v.gate5_state === 'rejected'),
+    showGate5: group.some((v) =>
+      (v.gate5_state === 'awaiting_review' || v.gate5_state === 'rejected') && v.thumbnail_path != null
+    ),
     videos: group,
   }))
 }

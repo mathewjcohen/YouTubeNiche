@@ -72,7 +72,7 @@ class Reconciler:
                 self._sb.table("scripts")
                 .update({
                     "gate3_state": "awaiting_review",
-                    "status": "approved",
+                    "status": "pending",
                     "rejection_reason": "YouTube video was deleted — returned for review",
                 })
                 .in_("id", script_ids)

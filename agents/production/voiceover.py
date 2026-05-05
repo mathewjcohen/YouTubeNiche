@@ -1,7 +1,9 @@
 import asyncio
 import re
 import random
+import time
 from dataclasses import dataclass
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import List, Tuple
 from supabase import Client
@@ -287,7 +289,24 @@ class VoiceoverAgent:
         )
         return self._sb.storage.from_("voiceovers").get_public_url(storage_key)
 
+    # Stop accepting new scripts this many seconds before GHA kills the process.
+    # GHA fast job timeout is 55 min (3300s); one TTS call can take ~5 min.
+    _BUDGET_SECS = 45 * 60  # 45 minutes
+
     def process_approved_scripts(self, niche_id: str) -> None:
+        # Self-heal: scripts stuck in 'processing' for >2h never recovered on their own.
+        # Reset them so the next run picks them up again.
+        stale_cutoff = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        recovered = execute_with_retry(
+            self._sb.table("scripts")
+            .update({"status": "pending"})
+            .eq("niche_id", niche_id)
+            .eq("status", "processing")
+            .lt("updated_at", stale_cutoff)
+        ).data
+        if recovered:
+            print(f"[voiceover] reset {len(recovered)} stuck-processing script(s) for niche {niche_id}")
+
         niche_rows = execute_with_retry(
             self._sb.table("niches").select("category").eq("id", niche_id).limit(1)
         ).data
@@ -299,7 +318,11 @@ class VoiceoverAgent:
             .eq("gate3_state", "approved")
             .eq("status", "pending")
         ).data
+        budget_start = time.monotonic()
         for script in scripts:
+            if time.monotonic() - budget_start > self._BUDGET_SECS:
+                print(f"[voiceover] time budget exhausted ({self._BUDGET_SECS // 60}min), stopping early")
+                break
             # Mark processing immediately so a concurrent/restarted agent run won't duplicate
             execute_with_retry(
                 self._sb.table("scripts").update({"status": "processing"}).eq("id", script["id"])

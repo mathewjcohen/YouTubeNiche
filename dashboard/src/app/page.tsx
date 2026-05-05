@@ -26,7 +26,7 @@ async function getHomeData() {
   const supabase = await createClient()
 
   const [
-    { count: activeChannels },
+    { data: linkedNiches },
     { count: pendingGate1 },
     { count: pendingGate2 },
     { count: pendingGate3 },
@@ -39,7 +39,7 @@ async function getHomeData() {
     { data: scripts },
     { data: videos },
   ] = await Promise.all([
-    supabase.from('niches').select('*', { count: 'exact', head: true }).eq('channel_state', 'linked'),
+    supabase.from('niches').select('youtube_account_id').eq('channel_state', 'linked').not('youtube_account_id', 'is', null),
     supabase.from('niches').select('*', { count: 'exact', head: true }).eq('gate1_state', 'awaiting_review'),
     supabase.from('topics').select('*', { count: 'exact', head: true }).eq('gate2_state', 'awaiting_review'),
     supabase.from('scripts').select('*', { count: 'exact', head: true }).eq('gate3_state', 'awaiting_review'),
@@ -52,6 +52,8 @@ async function getHomeData() {
     supabase.from('scripts').select('niche_id, gate3_state'),
     supabase.from('videos').select('niche_id, gate4_state, gate5_state, gate6_state, thumbnail_path'),
   ])
+
+  const activeChannels = new Set((linkedNiches ?? []).map((n) => n.youtube_account_id)).size
 
   const totalPending = (pendingGate1 ?? 0) + (pendingGate2 ?? 0) + (pendingGate3 ?? 0)
     + (pendingGate4 ?? 0) + (pendingGate5 ?? 0) + (pendingGate6 ?? 0)
@@ -110,7 +112,7 @@ async function getHomeData() {
   }
 
   return {
-    activeChannels: activeChannels ?? 0,
+    activeChannels,
     totalPending,
     weeklyViews,
     publishedVideos,
@@ -137,7 +139,7 @@ export default async function HomePage() {
           <StatCard label="Pending Reviews" value={data.totalPending} highlight={data.totalPending > 0} />
           <StatCard label="Published Videos" value={data.publishedVideos} />
           <StatCard label="Published Shorts" value={data.publishedShorts} />
-          <StatCard label="Total Views" value={data.weeklyViews.toLocaleString()} />
+          <StatCard label="7-Day Views" value={data.weeklyViews.toLocaleString()} />
         </div>
       </div>
 

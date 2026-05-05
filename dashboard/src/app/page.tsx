@@ -39,7 +39,7 @@ async function getHomeData() {
     { data: scripts },
     { data: videos },
   ] = await Promise.all([
-    supabase.from('niches').select('*', { count: 'exact', head: true }).in('status', ['testing', 'promoted']),
+    supabase.from('niches').select('*', { count: 'exact', head: true }).eq('channel_state', 'linked'),
     supabase.from('niches').select('*', { count: 'exact', head: true }).eq('gate1_state', 'awaiting_review'),
     supabase.from('topics').select('*', { count: 'exact', head: true }).eq('gate2_state', 'awaiting_review'),
     supabase.from('scripts').select('*', { count: 'exact', head: true }).eq('gate3_state', 'awaiting_review'),

@@ -16,7 +16,7 @@ from moviepy.editor import (
     CompositeVideoClip, ColorClip
 )
 from supabase import Client
-from agents.shared.gate_client import GateClient
+from agents.shared.gate_client import GateClient, GateNumber
 from agents.shared.db_retry import execute_with_retry
 
 
@@ -201,11 +201,16 @@ class VideoAssembler:
                     output_stem=stem,
                     is_short=(video["video_type"] == "short"),
                 )
+                gate6_enabled = self._gate.gate_enabled(GateNumber.FINAL_VIDEO, video["niche_id"])
+                gate6_state = "awaiting_review" if gate6_enabled else "approved"
+                new_status = "approved" if not gate6_enabled else "processing"
                 execute_with_retry(
-                    self._sb.table("videos").update(
-                        {"video_path": out_path, "status": "processing", "gate6_state": "awaiting_review"}
-                    ).eq("id", video["id"])
+                    self._sb.table("videos").update({
+                        "video_path": out_path,
+                        "status": new_status,
+                        "gate6_state": gate6_state,
+                    }).eq("id", video["id"])
                 )
-                print(f"[assembler] video {video['id']} assembled → {out_path}")
+                print(f"[assembler] video {video['id']} assembled → {out_path} (gate6={gate6_state})")
             except Exception as exc:
                 print(f"[assembler] video {video['id']} failed, will retry next run: {exc}")

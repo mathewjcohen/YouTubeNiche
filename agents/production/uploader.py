@@ -286,6 +286,14 @@ class YouTubeUploader:
                 execute_with_retry(
                     self._sb.table("videos").delete().eq("id", video["id"])
                 )
+                remaining = execute_with_retry(
+                    self._sb.table("videos").select("id").eq("script_id", video["script_id"])
+                ).data
+                if not remaining:
+                    execute_with_retry(
+                        self._sb.table("scripts").update({"status": "done"}).eq("id", video["script_id"])
+                    )
+                    print(f"[uploader] script {video['script_id'][:8]} marked done")
                 self._delete_s3_video(video["video_path"])
                 self._delete_supabase_assets(video)
                 print(f"[uploader] uploaded {yt_id} ({video['video_type']})")

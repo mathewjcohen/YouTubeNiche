@@ -173,6 +173,23 @@ class VideoAssembler:
         print(f"[assembler] uploading {out_path.name}…")
         return self._upload_video(out_path, out_path.name)
 
+    def _delete_voiceover_assets(self, video: dict) -> None:
+        def _key_from_url(url: Optional[str], bucket: str) -> Optional[str]:
+            if not url:
+                return None
+            marker = f"/{bucket}/"
+            idx = url.find(marker)
+            return url[idx + len(marker):] if idx != -1 else None
+
+        for field in ("audio_path", "srt_path"):
+            key = _key_from_url(video.get(field), "voiceovers")
+            if key:
+                try:
+                    self._sb.storage.from_("voiceovers").remove([key])
+                    print(f"[assembler] deleted voiceovers/{key}")
+                except Exception as exc:
+                    print(f"[assembler] voiceovers/{key} cleanup failed (non-fatal): {exc}")
+
     def process_approved_voiceovers(self, niche_id: str) -> None:
         videos = execute_with_retry(
             self._sb.table("videos")
@@ -212,5 +229,6 @@ class VideoAssembler:
                     }).eq("id", video["id"])
                 )
                 print(f"[assembler] video {video['id']} assembled → {out_path} (gate6={gate6_state})")
+                self._delete_voiceover_assets(video)
             except Exception as exc:
                 print(f"[assembler] video {video['id']} failed, will retry next run: {exc}")

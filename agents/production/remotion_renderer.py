@@ -122,6 +122,7 @@ class RemotionRenderer:
         per_scene_sec = duration_sec / len(tags)
         per_scene_frames = int(per_scene_sec * FPS)
 
+        broll_keys: list[str] = []
         for i, tag in enumerate(tags):
             result = _pexels_search(tag, pexels_key)
             if not result:
@@ -131,6 +132,7 @@ class RemotionRenderer:
             public_url = _download_and_upload_broll(
                 self._sb, pexels_url, pexels_headers, storage_key
             )
+            broll_keys.append(storage_key)
             scenes.append({"url": public_url, "durationFrames": per_scene_frames})
 
         if not scenes:
@@ -210,7 +212,7 @@ class RemotionRenderer:
         else:
             raise TimeoutError(f"Remotion render timed out after {RENDER_TIMEOUT}s")
 
-        # 5. Download output and store in Supabase videos bucket via TUS
+        # 5. Download output and upload to S3
         output_url = progress.outputFile
         print(f"[remotion] render complete → {output_url}")
         storage_key = f"{output_stem}.mp4"
@@ -221,9 +223,20 @@ class RemotionRenderer:
                 tmp.write(chunk)
             tmp_path = Path(tmp.name)
         try:
-            return self._upload_video(tmp_path, storage_key)
+            s3_url = self._upload_video(tmp_path, storage_key)
         finally:
             tmp_path.unlink(missing_ok=True)
+
+        # 6. Delete b-roll clips from Supabase storage — no longer needed after S3 upload
+        if broll_keys:
+            try:
+                self._sb.storage.from_("broll").remove(broll_keys)
+                for k in broll_keys:
+                    print(f"[remotion] deleted broll/{k}")
+            except Exception as exc:
+                print(f"[remotion] broll cleanup failed (non-fatal): {exc}")
+
+        return s3_url
 
     def process_approved_voiceovers(self, niche_id: str) -> None:
         videos = execute_with_retry(

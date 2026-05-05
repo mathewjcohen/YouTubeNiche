@@ -5,6 +5,7 @@ import {
   retryVoiceover, retryVideoAssembly, returnToScript,
 } from '@/app/actions/media'
 import { Form, SubmitButton } from '@/components/form'
+import { Collapsible } from '@/components/collapsible'
 import { TitleEditor } from './title-editor'
 import type { Video } from '@/lib/types'
 
@@ -22,11 +23,18 @@ type VideoRow = Video & {
 type ScriptGroup = {
   scriptId: string
   title: string | null
+  nicheId: string
   nicheName: string
   longThumbnail: string | null | undefined
   shortThumbnail: string | null | undefined
   showGate5: boolean
   videos: VideoRow[]
+}
+
+type NicheGroup = {
+  nicheId: string
+  nicheName: string
+  scripts: ScriptGroup[]
 }
 
 function hasActiveGate(v: VideoRow): boolean {
@@ -75,6 +83,7 @@ function groupByScript(videos: VideoRow[]): ScriptGroup[] {
   return Array.from(map.values()).map((group) => ({
     scriptId: group[0].script_id,
     title: group[0].scripts?.youtube_title ?? null,
+    nicheId: group[0].niche_id,
     nicheName: group[0].niches?.name ?? '',
     longThumbnail: group.find((v) => v.video_type === 'long' && v.thumbnail_path?.startsWith('http'))?.thumbnail_path,
     shortThumbnail: group.find((v) => v.video_type === 'short' && v.thumbnail_path?.startsWith('http'))?.thumbnail_path,
@@ -83,6 +92,15 @@ function groupByScript(videos: VideoRow[]): ScriptGroup[] {
     ),
     videos: group,
   })).filter(hasVisibleContent)
+}
+
+function groupByNiche(scripts: ScriptGroup[]): NicheGroup[] {
+  const map = new Map<string, NicheGroup>()
+  for (const s of scripts) {
+    if (!map.has(s.nicheId)) map.set(s.nicheId, { nicheId: s.nicheId, nicheName: s.nicheName, scripts: [] })
+    map.get(s.nicheId)!.scripts.push(s)
+  }
+  return Array.from(map.values())
 }
 
 export default async function MediaPage() {
@@ -112,19 +130,41 @@ export default async function MediaPage() {
     rows.push(...((videos ?? []) as VideoRow[]))
   }
 
-  const groups = groupByScript(rows)
+  const scriptGroups = groupByScript(rows)
+  const nicheGroups = groupByNiche(scriptGroups)
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-2">Media Review</h1>
-      <p className="text-sm text-gray-500 mb-6">Gates 4/5/6 — {groups.length} script(s) awaiting review</p>
+      <p className="text-sm text-gray-500 mb-6">Gates 4/5/6 — {scriptGroups.length} script(s) awaiting review</p>
 
-      {!groups.length ? (
+      {!scriptGroups.length ? (
         <p className="text-gray-500">Queue is empty.</p>
       ) : (
-        <div className="space-y-4">
-          {groups.map((group) => (
-            <ScriptGroupCard key={group.scriptId} group={group} />
+        <div className="space-y-3">
+          {nicheGroups.map((niche) => (
+            <Collapsible
+              key={niche.nicheId}
+              defaultOpen
+              className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden"
+              titleClassName="px-5 py-3.5"
+              title={
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold text-gray-100">{niche.nicheName}</span>
+                  <span className="text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full">
+                    {niche.scripts.length}
+                  </span>
+                </div>
+              }
+            >
+              <div className="divide-y divide-gray-700 border-t border-gray-700">
+                {niche.scripts.map((group) => (
+                  <div key={group.scriptId} className="p-5">
+                    <ScriptGroupCard group={group} />
+                  </div>
+                ))}
+              </div>
+            </Collapsible>
           ))}
         </div>
       )}
@@ -150,8 +190,7 @@ function RejectionReason({ reason }: { reason: string | null | undefined }) {
 
 function ScriptGroupCard({ group }: { group: ScriptGroup }) {
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-5">
-      <div className="flex gap-5">
+    <div className="flex gap-5">
         <div className="w-40 h-24 bg-gray-700 rounded overflow-hidden shrink-0 flex items-center justify-center">
           {group.longThumbnail ? (
             <a href={group.longThumbnail} target="_blank" rel="noreferrer" className="w-full h-full block">
@@ -165,7 +204,6 @@ function ScriptGroupCard({ group }: { group: ScriptGroup }) {
 
         <div className="flex-1 min-w-0">
           <TitleEditor scriptId={group.scriptId} initialTitle={group.title} />
-          <p className="text-xs text-gray-500 mb-3">{group.nicheName}</p>
 
           {/* Gate 5 — thumbnail, shared across all formats */}
           {group.showGate5 && (() => {
@@ -325,6 +363,5 @@ function ScriptGroupCard({ group }: { group: ScriptGroup }) {
           })}
         </div>
       </div>
-    </div>
   )
 }

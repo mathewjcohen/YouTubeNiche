@@ -17,8 +17,8 @@ async function getPendingCounts(): Promise<PendingCounts> {
     supabase.from('topics').select('*', { count: 'exact', head: true }).eq('gate2_state', 'awaiting_review'),
     supabase.from('scripts').select('*', { count: 'exact', head: true }).eq('gate3_state', 'awaiting_review'),
     supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate4_state', 'awaiting_review'),
-    supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate5_state', 'awaiting_review'),
-    supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate6_state', 'awaiting_review'),
+    supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate5_state', 'awaiting_review').not('thumbnail_path', 'is', null),
+    supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate6_state', 'awaiting_review').eq('gate4_state', 'approved').eq('gate5_state', 'approved'),
   ])
 
   return {

@@ -97,10 +97,34 @@ export interface NicheAnalytics {
   views_total: number
   ctr: number
   avg_watch_time_pct: number
+  avg_view_duration_sec: number | null
+  impressions: number
+  long_views: number
+  long_avg_view_duration_sec: number | null
+  long_avg_watch_pct: number | null
+  short_views: number
+  short_avg_view_duration_sec: number | null
+  short_avg_watch_pct: number | null
+  subscribers_gained: number
+  estimated_minutes_watched: number
+  likes: number
   subs_total: number
   early_promotion_flagged: boolean
   videos_published: number
   shorts_published: number
+}
+
+export interface VideoAnalytics {
+  id: string
+  niche_id: string
+  youtube_video_id: string
+  video_type: 'long' | 'short'
+  polled_at: string
+  views: number
+  avg_view_duration_sec: number | null
+  avg_view_pct: number | null
+  estimated_minutes_watched: number | null
+  likes: number
 }
 
 export interface PendingCounts {

@@ -296,16 +296,19 @@ class VoiceoverAgent:
     def process_approved_scripts(self, niche_id: str) -> None:
         # Self-heal: scripts stuck in 'processing' for >2h never recovered on their own.
         # Reset them so the next run picks them up again.
-        stale_cutoff = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
-        recovered = execute_with_retry(
-            self._sb.table("scripts")
-            .update({"status": "pending"})
-            .eq("niche_id", niche_id)
-            .eq("status", "processing")
-            .lt("updated_at", stale_cutoff)
-        ).data
-        if recovered:
-            print(f"[voiceover] reset {len(recovered)} stuck-processing script(s) for niche {niche_id}")
+        try:
+            stale_cutoff = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+            recovered = execute_with_retry(
+                self._sb.table("scripts")
+                .update({"status": "pending"})
+                .eq("niche_id", niche_id)
+                .eq("status", "processing")
+                .lt("updated_at", stale_cutoff)
+            ).data
+            if recovered:
+                print(f"[voiceover] reset {len(recovered)} stuck-processing script(s) for niche {niche_id}")
+        except Exception as e:
+            print(f"[voiceover] stuck-script reset skipped (migration pending?): {e}")
 
         niche_rows = execute_with_retry(
             self._sb.table("niches").select("category").eq("id", niche_id).limit(1)

@@ -109,7 +109,14 @@ class VideoAssembler:
         with tempfile.TemporaryDirectory() as tmpdir:
             if audio_path.startswith("http"):
                 local_audio = Path(tmpdir) / "audio.mp3"
-                urllib.request.urlretrieve(audio_path, str(local_audio))
+                if ".amazonaws.com/" in audio_path:
+                    from agents.shared.config_loader import get_env
+                    s3_key = audio_path.split(".amazonaws.com/", 1)[1]
+                    boto3.client("s3", region_name=get_env("REMOTION_REGION")).download_file(
+                        get_env("AWS_S3_BUCKET"), s3_key, str(local_audio)
+                    )
+                else:
+                    urllib.request.urlretrieve(audio_path, str(local_audio))
                 audio_path = str(local_audio)
 
             audio = AudioFileClip(audio_path)
@@ -174,21 +181,19 @@ class VideoAssembler:
         return self._upload_video(out_path, out_path.name)
 
     def _delete_voiceover_assets(self, video: dict) -> None:
-        def _key_from_url(url: Optional[str], bucket: str) -> Optional[str]:
-            if not url:
-                return None
-            marker = f"/{bucket}/"
-            idx = url.find(marker)
-            return url[idx + len(marker):] if idx != -1 else None
-
+        from agents.shared.config_loader import get_env
         for field in ("audio_path", "srt_path"):
-            key = _key_from_url(video.get(field), "voiceovers")
-            if key:
-                try:
-                    self._sb.storage.from_("voiceovers").remove([key])
-                    print(f"[assembler] deleted voiceovers/{key}")
-                except Exception as exc:
-                    print(f"[assembler] voiceovers/{key} cleanup failed (non-fatal): {exc}")
+            url = video.get(field)
+            if not url or ".amazonaws.com/" not in url:
+                continue
+            try:
+                key = url.split(".amazonaws.com/", 1)[1]
+                bucket = get_env("AWS_S3_BUCKET")
+                region = get_env("REMOTION_REGION")
+                boto3.client("s3", region_name=region).delete_object(Bucket=bucket, Key=key)
+                print(f"[assembler] deleted s3://{bucket}/{key}")
+            except Exception as exc:
+                print(f"[assembler] s3 audio cleanup failed (non-fatal): {exc}")
 
     def process_approved_voiceovers(self, niche_id: str) -> None:
         videos = execute_with_retry(

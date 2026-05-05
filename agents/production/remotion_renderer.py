@@ -259,8 +259,18 @@ class RemotionRenderer:
                     else scripts_data["short_text"]
                 )
                 stem = f"{video['id'][:8]}_{video['video_type']}_remotion"
+                audio_url = video["audio_path"]
+                if ".amazonaws.com/" in audio_url:
+                    # Remotion Lambda downloads the audio via HTTP — generate a
+                    # presigned URL so it can access private S3 objects.
+                    s3_key = audio_url.split(".amazonaws.com/", 1)[1]
+                    audio_url = boto3.client("s3", region_name=get_env("REMOTION_REGION")).generate_presigned_url(
+                        "get_object",
+                        Params={"Bucket": get_env("AWS_S3_BUCKET"), "Key": s3_key},
+                        ExpiresIn=3600,
+                    )
                 out_url = self.render(
-                    audio_url=video["audio_path"],
+                    audio_url=audio_url,
                     script_text=script_text,
                     output_stem=stem,
                 )

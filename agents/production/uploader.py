@@ -147,9 +147,14 @@ class YouTubeUploader:
             return url[idx + len(marker):] if idx != -1 else None
 
         for field in ("audio_path", "srt_path"):
-            key = _key_from_url(video.get(field), "voiceovers")
-            if key:
-                _remove("voiceovers", [key])
+            url = video.get(field) or ""
+            if ".amazonaws.com/" in url:
+                # Audio is on S3 (deleted by assembler, but clean up here as fallback)
+                self._delete_s3_video(url)
+            else:
+                key = _key_from_url(url, "voiceovers")
+                if key:
+                    _remove("voiceovers", [key])
 
         key = _key_from_url(video.get("thumbnail_path"), "thumbnails")
         if key:

@@ -283,11 +283,17 @@ class VoiceoverAgent:
         raise last_exc
 
     def _upload(self, local_path: Path, content_type: str) -> str:
-        storage_key = local_path.name
-        self._sb.storage.from_("voiceovers").upload(
-            storage_key, local_path.read_bytes(), {"content-type": content_type, "upsert": "true"}
+        import boto3
+        bucket = get_env("AWS_S3_BUCKET")
+        region = get_env("REMOTION_REGION")
+        key = f"audio/{local_path.name}"
+        boto3.client("s3", region_name=region).upload_file(
+            str(local_path),
+            bucket,
+            key,
+            ExtraArgs={"ContentType": content_type},
         )
-        return self._sb.storage.from_("voiceovers").get_public_url(storage_key)
+        return f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
 
     # Stop accepting new scripts this many seconds before GHA kills the process.
     # GHA fast job timeout is 55 min (3300s); one TTS call can take ~5 min.

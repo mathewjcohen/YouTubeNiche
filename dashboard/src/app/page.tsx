@@ -39,7 +39,7 @@ async function getHomeData() {
     { data: scripts },
     { data: videos },
   ] = await Promise.all([
-    supabase.from('niches').select('youtube_account_id').eq('channel_state', 'linked').not('youtube_account_id', 'is', null),
+    supabase.from('niches').select('name, youtube_account_id, youtube_accounts(channel_name)').eq('channel_state', 'linked').not('youtube_account_id', 'is', null),
     supabase.from('niches').select('*', { count: 'exact', head: true }).eq('gate1_state', 'awaiting_review'),
     supabase.from('topics').select('*', { count: 'exact', head: true }).eq('gate2_state', 'awaiting_review'),
     supabase.from('scripts').select('*', { count: 'exact', head: true }).eq('gate3_state', 'awaiting_review'),
@@ -53,10 +53,28 @@ async function getHomeData() {
     supabase.from('videos').select('niche_id, gate4_state, gate5_state, gate6_state, thumbnail_path'),
   ])
 
-  const activeChannels = new Set((linkedNiches ?? []).map((n) => n.youtube_account_id)).size
+  // Active channels — distinct YouTube accounts, grouped with their niches
+  const channelNicheMap = new Map<string, string[]>()
+  for (const n of linkedNiches ?? []) {
+    const acc = n.youtube_accounts
+    const chName = (Array.isArray(acc) ? acc[0] : acc)?.channel_name ?? 'Unknown'
+    if (!channelNicheMap.has(chName)) channelNicheMap.set(chName, [])
+    channelNicheMap.get(chName)!.push(n.name)
+  }
+  const activeChannels = channelNicheMap.size
+  const channelGroups = Array.from(channelNicheMap.entries()).map(([channel, nicheNames]) => ({ channel, nicheNames }))
 
   const totalPending = (pendingGate1 ?? 0) + (pendingGate2 ?? 0) + (pendingGate3 ?? 0)
     + (pendingGate4 ?? 0) + (pendingGate5 ?? 0) + (pendingGate6 ?? 0)
+
+  const pendingBreakdown = [
+    { gate: 'G1 Niches',    count: pendingGate1 ?? 0 },
+    { gate: 'G2 Topics',    count: pendingGate2 ?? 0 },
+    { gate: 'G3 Scripts',   count: pendingGate3 ?? 0 },
+    { gate: 'G4 Voiceover', count: pendingGate4 ?? 0 },
+    { gate: 'G5 Thumbnail', count: pendingGate5 ?? 0 },
+    { gate: 'G6 Video',     count: pendingGate6 ?? 0 },
+  ]
 
   // Most recent snapshot per niche — sum for top-level stats
   type AnalyticsRow = NonNullable<typeof recentAnalytics>[0]
@@ -67,6 +85,14 @@ async function getHomeData() {
   const weeklyViews = Array.from(latestByNiche.values()).reduce((s, r) => s + (r.views_total ?? 0), 0)
   const publishedVideos = Array.from(latestByNiche.values()).reduce((s, r) => s + (r.videos_published ?? 0), 0)
   const publishedShorts = Array.from(latestByNiche.values()).reduce((s, r) => s + (r.shorts_published ?? 0), 0)
+
+  const nicheNameMap = new Map((niches ?? []).map((n) => [n.id, n.name]))
+  const analyticsBreakdown = Array.from(latestByNiche.entries()).map(([nicheId, row]) => ({
+    name: nicheNameMap.get(nicheId) ?? nicheId.slice(0, 8),
+    videos: row.videos_published ?? 0,
+    shorts: row.shorts_published ?? 0,
+    views: row.views_total ?? 0,
+  }))
 
   // Build funnel data from actual counts
   const totalTopics = (topics ?? []).length
@@ -80,14 +106,7 @@ async function getHomeData() {
   ]
 
   // Gate queue breakdown
-  const gateQueue = [
-    { gate: 'G1 Niches', count: pendingGate1 ?? 0 },
-    { gate: 'G2 Topics', count: pendingGate2 ?? 0 },
-    { gate: 'G3 Scripts', count: pendingGate3 ?? 0 },
-    { gate: 'G4 Voiceover', count: pendingGate4 ?? 0 },
-    { gate: 'G5 Thumbnail', count: pendingGate5 ?? 0 },
-    { gate: 'G6 Video', count: pendingGate6 ?? 0 },
-  ].filter((g) => g.count > 0)
+  const gateQueue = pendingBreakdown.filter((g) => g.count > 0)
 
   // Views over time: group by date, sum across niches
   const viewsByDate = new Map<string, number>()
@@ -113,10 +132,13 @@ async function getHomeData() {
 
   return {
     activeChannels,
+    channelGroups,
     totalPending,
+    pendingBreakdown,
     weeklyViews,
     publishedVideos,
     publishedShorts,
+    analyticsBreakdown,
     funnelData,
     gateQueue,
     viewsTimeline,
@@ -135,11 +157,86 @@ export default async function HomePage() {
 
         {/* Stat cards */}
         <div className="grid grid-cols-5 gap-4">
-          <StatCard label="Active Channels" value={data.activeChannels} />
-          <StatCard label="Pending Reviews" value={data.totalPending} highlight={data.totalPending > 0} />
-          <StatCard label="Published Videos" value={data.publishedVideos} />
-          <StatCard label="Published Shorts" value={data.publishedShorts} />
-          <StatCard label="7-Day Views" value={data.weeklyViews.toLocaleString()} />
+          <StatCard
+            label="Active Channels"
+            value={data.activeChannels}
+            tooltip={
+              <div className="space-y-3">
+                {data.channelGroups.map(({ channel, nicheNames }) => (
+                  <div key={channel}>
+                    <p className="font-semibold text-gray-100 mb-1">{channel}</p>
+                    <ul className="space-y-0.5">
+                      {nicheNames.map((n) => (
+                        <li key={n} className="text-gray-400 pl-2 before:content-['·'] before:mr-1.5 before:text-gray-600">{n}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            }
+          />
+          <StatCard
+            label="Pending Reviews"
+            value={data.totalPending}
+            highlight={data.totalPending > 0}
+            tooltip={
+              <div className="space-y-1">
+                <p className="font-semibold text-gray-100 mb-2">By gate</p>
+                {data.pendingBreakdown.map(({ gate, count }) => (
+                  <div key={gate} className="flex justify-between gap-4">
+                    <span className="text-gray-400">{gate}</span>
+                    <span className={count > 0 ? 'text-orange-400 font-medium' : 'text-gray-600'}>{count}</span>
+                  </div>
+                ))}
+              </div>
+            }
+          />
+          <StatCard
+            label="Published Videos"
+            value={data.publishedVideos}
+            tooltip={
+              <div className="space-y-1">
+                <p className="font-semibold text-gray-100 mb-2">By niche</p>
+                {data.analyticsBreakdown.map(({ name, videos }) => (
+                  <div key={name} className="flex justify-between gap-4">
+                    <span className="text-gray-400 truncate max-w-[140px]">{name}</span>
+                    <span className="text-gray-200 font-medium shrink-0">{videos}</span>
+                  </div>
+                ))}
+              </div>
+            }
+          />
+          <StatCard
+            label="Published Shorts"
+            value={data.publishedShorts}
+            tooltip={
+              <div className="space-y-1">
+                <p className="font-semibold text-gray-100 mb-2">By niche</p>
+                {data.analyticsBreakdown.map(({ name, shorts }) => (
+                  <div key={name} className="flex justify-between gap-4">
+                    <span className="text-gray-400 truncate max-w-[140px]">{name}</span>
+                    <span className="text-gray-200 font-medium shrink-0">{shorts}</span>
+                  </div>
+                ))}
+              </div>
+            }
+          />
+          <StatCard
+            label="7-Day Views"
+            value={data.weeklyViews.toLocaleString()}
+            tooltip={
+              <div className="space-y-1">
+                <p className="font-semibold text-gray-100 mb-2">By niche</p>
+                {data.analyticsBreakdown.map(({ name, views }) => (
+                  <div key={name} className="flex justify-between gap-4">
+                    <span className="text-gray-400 truncate max-w-[140px]">{name}</span>
+                    <span className="text-gray-200 font-medium shrink-0">{views.toLocaleString()}</span>
+                  </div>
+                ))}
+                <p className="pt-2 mt-1 border-t border-gray-700 text-gray-500">Rolling 7-day window from YouTube Analytics</p>
+              </div>
+            }
+          />
         </div>
       </div>
 
@@ -212,11 +309,26 @@ export default async function HomePage() {
   )
 }
 
-function StatCard({ label, value, highlight }: { label: string; value: string | number; highlight?: boolean }) {
+function StatCard({
+  label,
+  value,
+  highlight,
+  tooltip,
+}: {
+  label: string
+  value: string | number
+  highlight?: boolean
+  tooltip?: React.ReactNode
+}) {
   return (
-    <div className={`rounded-lg border p-5 bg-gray-800 ${highlight ? 'border-orange-500' : 'border-gray-700'}`}>
+    <div className={`relative group rounded-lg border p-5 bg-gray-800 ${highlight ? 'border-orange-500' : 'border-gray-700'}`}>
       <p className="text-sm text-gray-400">{label}</p>
       <p className={`text-3xl font-bold mt-1 ${highlight ? 'text-orange-400' : 'text-gray-100'}`}>{value}</p>
+      {tooltip && (
+        <div className="pointer-events-none hidden group-hover:block absolute left-0 top-full mt-2 z-50 w-56 bg-gray-900 border border-gray-600 rounded-lg p-3 text-xs text-gray-300 shadow-2xl">
+          {tooltip}
+        </div>
+      )}
     </div>
   )
 }

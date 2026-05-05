@@ -53,6 +53,18 @@ function deduplicateVideos(videos: VideoRow[]): VideoRow[] {
   return Array.from(seen.values())
 }
 
+function hasVisibleContent(group: ScriptGroup): boolean {
+  if (group.showGate5) return true
+  return group.videos.some((v) => {
+    if (v.gate4_state === 'awaiting_review' || v.gate4_state === 'rejected') return true
+    if (
+      (v.gate6_state === 'awaiting_review' || v.gate6_state === 'rejected') &&
+      v.gate4_state === 'approved' && v.gate5_state === 'approved'
+    ) return true
+    return false
+  })
+}
+
 function groupByScript(videos: VideoRow[]): ScriptGroup[] {
   const deduped = deduplicateVideos(videos)
   const map = new Map<string, VideoRow[]>()
@@ -70,7 +82,7 @@ function groupByScript(videos: VideoRow[]): ScriptGroup[] {
       (v.gate5_state === 'awaiting_review' || v.gate5_state === 'rejected') && v.thumbnail_path != null
     ),
     videos: group,
-  }))
+  })).filter(hasVisibleContent)
 }
 
 export default async function MediaPage() {

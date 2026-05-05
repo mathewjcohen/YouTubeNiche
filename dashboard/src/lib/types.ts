@@ -135,3 +135,69 @@ export interface PendingCounts {
   gate5: number
   gate6: number
 }
+
+export interface VideoRecord {
+  youtube_video_id: string
+  niche_id: string
+  niche_name: string
+  video_type: 'long' | 'short'
+  title: string
+  duration_sec: number | null
+  views: number
+  avg_view_pct: number | null
+  avg_view_duration_sec: number | null
+  estimated_minutes_watched: number | null
+  likes: number
+  retention_50pct: number | null
+}
+
+interface VideoSummary {
+  title: string
+  niche: string
+  type: string
+  views: number
+  watch_pct: number
+  word_count: number
+  duration_sec: number | null
+}
+
+export interface InsightStats {
+  period_days: number
+  total_videos: number
+  total_views: number
+  overall_avg_watch_pct: number
+  by_niche: Array<{
+    niche: string
+    video_count: number
+    total_views: number
+    avg_watch_pct: number
+    avg_views_per_video: number
+  }>
+  by_type: Record<string, {
+    count: number
+    total_views: number
+    avg_watch_pct: number
+    avg_views: number
+  }>
+  by_script_length: Array<{
+    script_length: string
+    count: number
+    avg_watch_pct: number
+    avg_views: number
+  }>
+  retention: {
+    videos_with_data: number
+    avg_50pct_dropoff: number | null
+    median_50pct_dropoff: number | null
+  }
+  top_5_videos: VideoSummary[]
+  bottom_5_videos: VideoSummary[]
+}
+
+export interface Insight {
+  id: string
+  generated_at: string
+  period_days: number
+  stats_json: InsightStats
+  summary_text: string
+}

@@ -3,7 +3,9 @@ import { StatusPill } from '@/components/status-pill'
 import { Collapsible } from '@/components/collapsible'
 import { FunnelChart } from '@/components/charts/funnel-chart'
 import { ViewsChart } from '@/components/charts/views-chart'
-import type { Niche } from '@/lib/types'
+import { VideoTable } from '@/components/video-table'
+import { InsightsWidget } from '@/components/insights-widget'
+import type { Niche, VideoRecord, Insight } from '@/lib/types'
 
 const GATE_LABELS: Record<number, string> = {
   2: 'Topic Selection',
@@ -38,6 +40,9 @@ async function getHomeData() {
     { data: topics },
     { data: scripts },
     { data: videos },
+    { data: pvRows },
+    { data: videoAnalytics },
+    { data: latestInsightRows },
   ] = await Promise.all([
     supabase.from('niches').select('name, youtube_account_id, youtube_accounts(channel_name)').eq('channel_state', 'linked').not('youtube_account_id', 'is', null),
     supabase.from('niches').select('*', { count: 'exact', head: true }).eq('gate1_state', 'awaiting_review'),
@@ -51,6 +56,9 @@ async function getHomeData() {
     supabase.from('topics').select('niche_id, gate2_state'),
     supabase.from('scripts').select('niche_id, gate3_state'),
     supabase.from('videos').select('niche_id, gate4_state, gate5_state, gate6_state, thumbnail_path'),
+    supabase.from('published_videos').select('youtube_video_id, niche_id, video_type, title, duration_sec'),
+    supabase.from('video_analytics').select('youtube_video_id, views, avg_view_pct, avg_view_duration_sec, likes, estimated_minutes_watched, audience_retention_json').order('polled_at', { ascending: false }),
+    supabase.from('insights').select('*').order('generated_at', { ascending: false }).limit(1),
   ])
 
   // Active channels — distinct YouTube accounts, grouped with their niches
@@ -119,6 +127,45 @@ async function getHomeData() {
     .slice(-14)
     .map(([date, views]) => ({ date, views }))
 
+  // --- Video performance table ---
+  const activeNicheIds = new Set((niches ?? []).map((n) => n.id))
+  const latestVA = new Map<string, NonNullable<typeof videoAnalytics>[0]>()
+  for (const row of videoAnalytics ?? []) {
+    if (!latestVA.has(row.youtube_video_id)) latestVA.set(row.youtube_video_id, row)
+  }
+
+  function retentionDrop50(json: Record<string, number> | null | undefined): number | null {
+    if (!json) return null
+    for (const [k, v] of Object.entries(json).sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))) {
+      if (v < 0.5) return parseFloat(k)
+    }
+    return null
+  }
+
+  const videoRecords: VideoRecord[] = (pvRows ?? [])
+    .filter((pv) => activeNicheIds.has(pv.niche_id) && latestVA.has(pv.youtube_video_id))
+    .map((pv) => {
+      const va = latestVA.get(pv.youtube_video_id)!
+      return {
+        youtube_video_id: pv.youtube_video_id,
+        niche_id: pv.niche_id,
+        niche_name: nicheNameMap.get(pv.niche_id) ?? 'Unknown',
+        video_type: pv.video_type as 'long' | 'short',
+        title: pv.title ?? pv.youtube_video_id,
+        duration_sec: pv.duration_sec ?? null,
+        views: va.views ?? 0,
+        avg_view_pct: va.avg_view_pct ?? null,
+        avg_view_duration_sec: va.avg_view_duration_sec ?? null,
+        estimated_minutes_watched: va.estimated_minutes_watched ?? null,
+        likes: va.likes ?? 0,
+        retention_50pct: retentionDrop50(va.audience_retention_json as Record<string, number> | null),
+      }
+    })
+    .sort((a, b) => b.views - a.views)
+
+  const videoNicheNames = [...new Set(videoRecords.map((v) => v.niche_name))].sort()
+  const latestInsight = (latestInsightRows ?? [])[0] as Insight | undefined ?? null
+
   const countsForNiche = (nicheId: string) => {
     const nicheVideos = (videos ?? []).filter((v) => v.niche_id === nicheId)
     return {
@@ -144,6 +191,9 @@ async function getHomeData() {
     viewsTimeline,
     niches: (niches ?? []) as Niche[],
     countsForNiche,
+    videoRecords,
+    videoNicheNames,
+    latestInsight,
   }
 }
 
@@ -264,6 +314,20 @@ export default async function HomePage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Insights + video performance */}
+      {(data.latestInsight || data.videoRecords.length > 0) && (
+        <div className="space-y-4">
+          <InsightsWidget insight={data.latestInsight} />
+
+          {data.videoRecords.length > 0 && (
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-5">
+              <h2 className="font-semibold text-gray-100 mb-4">Video Performance</h2>
+              <VideoTable videos={data.videoRecords} nicheNames={data.videoNicheNames} />
+            </div>
+          )}
         </div>
       )}
 

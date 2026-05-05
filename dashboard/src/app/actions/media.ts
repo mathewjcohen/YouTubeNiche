@@ -25,10 +25,16 @@ export async function approveMedia(id: string, gate: MediaGate): Promise<void> {
 
 export async function rejectMedia(id: string, gate: MediaGate, reason: string): Promise<void> {
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('videos')
-    .update({ [gateColumn(gate)]: 'rejected', [rejectionColumn(gate)]: reason })
-    .eq('id', id)
+  const update: Record<string, string | null> = {
+    [gateColumn(gate)]: 'rejected',
+    [rejectionColumn(gate)]: reason,
+  }
+  // Gate 6 rejection: clear old render and queue for re-assembly automatically
+  if (gate === 6) {
+    update.video_path = null
+    update.status = 'pending'
+  }
+  const { error } = await supabase.from('videos').update(update).eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/media')
 }
@@ -117,7 +123,7 @@ export async function retryVideoAssembly(videoId: string): Promise<void> {
   const supabase = await createClient()
   const { error } = await supabase
     .from('videos')
-    .update({ video_path: null, gate4_state: 'approved', gate6_state: 'pending', status: 'pending' })
+    .update({ video_path: null, gate4_state: 'approved', gate6_state: 'awaiting_review', status: 'pending' })
     .eq('id', videoId)
   if (error) throw new Error(error.message)
   revalidatePath('/media')

@@ -44,13 +44,13 @@ async function getHomeData() {
     supabase.from('topics').select('*', { count: 'exact', head: true }).eq('gate2_state', 'awaiting_review'),
     supabase.from('scripts').select('*', { count: 'exact', head: true }).eq('gate3_state', 'awaiting_review'),
     supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate4_state', 'awaiting_review'),
-    supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate5_state', 'awaiting_review'),
-    supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate6_state', 'awaiting_review'),
+    supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate5_state', 'awaiting_review').not('thumbnail_path', 'is', null),
+    supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate6_state', 'awaiting_review').eq('gate4_state', 'approved').eq('gate5_state', 'approved'),
     supabase.from('niche_analytics').select('polled_at, views_total, videos_published, shorts_published, niche_id').order('polled_at', { ascending: false }).limit(60),
     supabase.from('niches').select('id, name, category, status').in('status', ['testing', 'promoted']).order('status'),
     supabase.from('topics').select('niche_id, gate2_state'),
     supabase.from('scripts').select('niche_id, gate3_state'),
-    supabase.from('videos').select('niche_id, gate4_state, gate5_state, gate6_state'),
+    supabase.from('videos').select('niche_id, gate4_state, gate5_state, gate6_state, thumbnail_path'),
   ])
 
   const totalPending = (pendingGate1 ?? 0) + (pendingGate2 ?? 0) + (pendingGate3 ?? 0)
@@ -98,13 +98,16 @@ async function getHomeData() {
     .slice(-14)
     .map(([date, views]) => ({ date, views }))
 
-  const countsForNiche = (nicheId: string) => ({
-    2: tally((topics ?? []).filter((t) => t.niche_id === nicheId).map((t) => ({ state: t.gate2_state }))),
-    3: tally((scripts ?? []).filter((s) => s.niche_id === nicheId).map((s) => ({ state: s.gate3_state }))),
-    4: tally((videos ?? []).filter((v) => v.niche_id === nicheId).map((v) => ({ state: v.gate4_state }))),
-    5: tally((videos ?? []).filter((v) => v.niche_id === nicheId).map((v) => ({ state: v.gate5_state }))),
-    6: tally((videos ?? []).filter((v) => v.niche_id === nicheId).map((v) => ({ state: v.gate6_state }))),
-  })
+  const countsForNiche = (nicheId: string) => {
+    const nicheVideos = (videos ?? []).filter((v) => v.niche_id === nicheId)
+    return {
+      2: tally((topics ?? []).filter((t) => t.niche_id === nicheId).map((t) => ({ state: t.gate2_state }))),
+      3: tally((scripts ?? []).filter((s) => s.niche_id === nicheId).map((s) => ({ state: s.gate3_state }))),
+      4: tally(nicheVideos.map((v) => ({ state: v.gate4_state }))),
+      5: tally(nicheVideos.filter((v) => v.thumbnail_path != null).map((v) => ({ state: v.gate5_state }))),
+      6: tally(nicheVideos.filter((v) => v.gate4_state === 'approved' && v.gate5_state === 'approved').map((v) => ({ state: v.gate6_state }))),
+    }
+  }
 
   return {
     activeChannels: activeChannels ?? 0,

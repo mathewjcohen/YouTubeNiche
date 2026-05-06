@@ -1,6 +1,6 @@
 import os
 import json
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from supabase import Client, create_client
 from agents.discovery.niche_scorer import NicheScorer, NicheScoreResult
 from agents.discovery.youtube_client import YouTubeClient
@@ -29,8 +29,8 @@ class NicheScout:
         supabase: Client,
         scorer: NicheScorer,
         gate_client: GateClient,
-        news_adapters: Optional[List] = None,
-        news_keywords: Optional[Dict] = None,
+        news_adapters: Optional[List[Any]] = None,
+        news_keywords: Optional[Dict[str, List[str]]] = None,
     ):
         self._sb = supabase
         self._scorer = scorer
@@ -104,7 +104,7 @@ def main():
     yt = YouTubeClient(rapidapi_key=os.getenv("RAPIDAPI_KEY", ""))
     reddit = RedditScraper()
 
-    news_adapters: List = [GoogleNewsAdapter()]
+    news_adapters: List[Any] = [GoogleNewsAdapter()]
     newsapi_key = os.getenv("NEWSAPI_KEY")
     if newsapi_key:
         news_adapters.append(NewsAPIAdapter(api_key=newsapi_key))

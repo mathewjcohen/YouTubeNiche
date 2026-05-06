@@ -5,6 +5,7 @@ import json
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import List, Optional, Protocol
+from urllib.parse import quote_plus
 
 import feedparser
 import requests
@@ -30,7 +31,7 @@ class NewsAdapter(Protocol):
 
 class GoogleNewsAdapter:
     def fetch(self, keyword: str, days: int = 2) -> List[NewsItem]:
-        url = f"https://news.google.com/rss/search?q={keyword}&hl=en-US&gl=US&ceid=US:en"
+        url = f"https://news.google.com/rss/search?q={quote_plus(keyword)}&hl=en-US&gl=US&ceid=US:en"
         feed = feedparser.parse(url)
         if getattr(feed, "status", 200) == 429:
             time.sleep(5)

@@ -3,9 +3,18 @@ Cross-reference published_videos rows against the actual YouTube channel
 and delete any rows whose video has been removed from YouTube.
 
 Usage:
-  python3 scripts/purge_removed_videos.py                        # dry run (safe)
-  python3 scripts/purge_removed_videos.py --execute              # actually delete
-  python3 scripts/purge_removed_videos.py --channel <channel_id> # specific channel only
+  python3 scripts/purge_removed_videos.py                                 # dry run (safe)
+  python3 scripts/purge_removed_videos.py --execute                       # delete orphaned rows
+  python3 scripts/purge_removed_videos.py --execute --requeue             # delete + reset scripts for re-processing
+  python3 scripts/purge_removed_videos.py --channel <channel_id>          # specific channel only
+
+--requeue resets the affected scripts back to status=pending so the pipeline
+re-generates voiceovers and videos on the next GHA run. Use this when you want
+to re-upload removed videos with new settings (e.g. after swapping music tracks).
+
+Note: if a script has one video_type still live and another removed, both types
+will be re-processed. The still-live video will get a duplicate upload — delete
+the old version from YouTube manually after the new one goes up.
 """
 import argparse
 import os
@@ -29,7 +38,6 @@ SCOPES = [
 
 def get_channel_video_ids(youtube) -> set[str]:
     """Return all video IDs currently in the channel's uploads playlist."""
-    # Get the uploads playlist ID for this channel
     ch_resp = youtube.channels().list(part="contentDetails", mine=True).execute()
     uploads_playlist = ch_resp["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
 
@@ -53,46 +61,52 @@ def get_channel_video_ids(youtube) -> set[str]:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--execute", action="store_true", help="Actually delete rows (default: dry run)")
+    parser.add_argument("--requeue", action="store_true", help="Reset affected scripts to pending for re-processing (requires --execute)")
     parser.add_argument("--channel", help="Only process this channel_id (default: all channels)")
     args = parser.parse_args()
 
+    if args.requeue and not args.execute:
+        print("--requeue requires --execute. Exiting.")
+        sys.exit(1)
+
     sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
-    # Load all youtube_accounts (optionally filtered)
     query = sb.table("youtube_accounts").select("id, channel_id, token_json")
     if args.channel:
         query = query.eq("channel_id", args.channel)
     accounts = query.execute().data
 
     total_removed = 0
+    all_orphaned_script_ids: set[str] = set()
 
     for account in accounts:
         channel_id = account["channel_id"]
         token_json = account["token_json"]
         print(f"\n--- Channel: {channel_id} ---")
 
-        # Build YouTube service for this account
         creds = Credentials.from_authorized_user_info(token_json, SCOPES)
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
         youtube = build("youtube", "v3", credentials=creds)
 
-        # Get all video IDs currently on YouTube
         live_ids = get_channel_video_ids(youtube)
         print(f"  YouTube: {len(live_ids)} videos currently live")
 
-        # Get all published_videos rows for this channel's niches
         niches = sb.table("niches").select("id").eq("youtube_account_id", account["id"]).execute().data
         niche_ids = [n["id"] for n in niches]
         if not niche_ids:
             print("  No niches linked — skipping")
             continue
 
-        db_rows = sb.table("published_videos").select("id, youtube_video_id, video_type, niche_id") \
-            .in_("niche_id", niche_ids).execute().data
+        db_rows = (
+            sb.table("published_videos")
+            .select("id, youtube_video_id, video_type, niche_id, script_id")
+            .in_("niche_id", niche_ids)
+            .execute()
+            .data
+        )
         print(f"  DB: {len(db_rows)} published_videos rows")
 
-        # Find rows whose video_id is not on YouTube anymore
         orphaned = [r for r in db_rows if r["youtube_video_id"] not in live_ids]
         print(f"  Orphaned (removed from YouTube): {len(orphaned)}")
 
@@ -104,12 +118,25 @@ def main():
             orphaned_ids = [r["id"] for r in orphaned]
             sb.table("published_videos").delete().in_("id", orphaned_ids).execute()
             print(f"  Deleted {len(orphaned)} rows")
+            for r in orphaned:
+                if r.get("script_id"):
+                    all_orphaned_script_ids.add(r["script_id"])
 
         total_removed += len(orphaned)
 
     print(f"\n{'Deleted' if args.execute else 'Would delete'} {total_removed} total orphaned rows.")
+
+    if args.execute and args.requeue and all_orphaned_script_ids:
+        script_ids = list(all_orphaned_script_ids)
+        print(f"\nRequeuing {len(script_ids)} scripts for re-processing...")
+        # Reset to pending so the voiceover agent picks them up on next run.
+        # gate3_state stays approved — scripts were already reviewed, no need to re-gate.
+        sb.table("scripts").update({"status": "pending"}).in_("id", script_ids).execute()
+        print(f"  Reset {len(script_ids)} scripts to status=pending.")
+        print("  Pipeline will regenerate voiceovers and videos on the next GHA run.")
+
     if not args.execute:
-        print("Re-run with --execute to apply.")
+        print("Re-run with --execute to apply. Add --requeue to also reset scripts for re-upload.")
 
 
 if __name__ == "__main__":

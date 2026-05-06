@@ -25,7 +25,7 @@ test('rejectScript includes rejection_reason', async () => {
   )
 })
 
-test('updateScript patches long_form_text and short_text', async () => {
-  await updateScript('script-1', 'new long form', 'new short')
-  expect(mockUpdate).toHaveBeenCalledWith({ long_form_text: 'new long form', short_text: 'new short' })
+test('updateScript patches long_form_text, short_text, and youtube_title', async () => {
+  await updateScript('script-1', 'new long form', 'new short', 'My Title')
+  expect(mockUpdate).toHaveBeenCalledWith({ long_form_text: 'new long form', short_text: 'new short', youtube_title: 'My Title' })
 })

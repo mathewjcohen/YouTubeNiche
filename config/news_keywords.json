@@ -1,0 +1,10 @@
+{
+  "legal": ["lawsuit settlement", "class action", "supreme court ruling", "consumer rights"],
+  "insurance": ["insurance claim denied", "health insurance", "coverage dispute"],
+  "tax": ["IRS audit", "tax deadline", "tax refund"],
+  "personal_finance": ["interest rates", "credit card debt", "student loan forgiveness"],
+  "real_estate": ["housing market", "mortgage rates", "foreclosure"],
+  "career": ["layoffs", "job market", "remote work policy"],
+  "ai_tech": ["AI regulation", "ChatGPT", "AI job displacement"],
+  "health": ["FDA approval", "drug recall", "medical study"]
+}

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Set
+from typing import List, Set, Optional
 import os
 import re
 import time
@@ -28,7 +28,7 @@ def _strip_html(text: str) -> str:
     return html.unescape(text).strip()
 
 
-def _post_id_from_url(url: str) -> str | None:
+def _post_id_from_url(url: str) -> Optional[str]:
     m = _POST_ID_RE.search(url)
     return m.group(1) if m else None
 
@@ -96,7 +96,14 @@ def main():
     subreddits_map = get_subreddits()
 
     active_niches = execute_with_retry(sb.table("niches").select("*").in_("status", ["testing", "promoted"])).data
-    known_ids = {row["reddit_post_id"] for row in execute_with_retry(sb.table("topics").select("reddit_post_id")).data}
+    # Load known source_ids for reddit posts only (source_type = 'reddit')
+    known_ids = {
+        row["source_id"]
+        for row in execute_with_retry(
+            sb.table("topics").select("source_id").eq("source_type", "reddit")
+        ).data
+        if row.get("source_id")
+    }
 
     for niche in active_niches:
         subs = niche.get("subreddits") or subreddits_map.get(niche["category"], [])
@@ -128,7 +135,9 @@ def main():
 
             result = execute_with_retry(sb.table("topics").insert({
                 "niche_id": niche["id"],
-                "reddit_post_id": post.post_id,
+                "reddit_post_id": post.post_id,   # retained for compat
+                "source_type": "reddit",
+                "source_id": post.post_id,
                 "title": post.title,
                 "url": post.url,
                 "body": post.body,

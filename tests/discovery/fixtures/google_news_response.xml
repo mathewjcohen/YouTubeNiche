@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Google News - lawsuit settlement</title>
+    <link>https://news.google.com</link>
+    <item>
+      <title>Lawsuit settlement reached in major class action case</title>
+      <link>https://news.example.com/article/lawsuit-settlement-2025</link>
+      <pubDate>Wed, 07 May 2025 10:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Court ruling changes consumer rights nationwide</title>
+      <link>https://news.example.com/article/court-ruling-consumer-rights</link>
+      <pubDate>Wed, 07 May 2025 08:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

@@ -252,6 +252,18 @@ class YouTubeUploader:
             if not script:
                 print(f"[uploader] video {video['id']} has no linked script, skip")
                 continue
+
+            # Atomic claim — prevents concurrent pipeline runs from double-uploading the same video
+            claimed = execute_with_retry(
+                self._sb.table("videos")
+                .update({"status": "uploading"})
+                .eq("id", video["id"])
+                .eq("status", "approved")
+            ).data
+            if not claimed:
+                print(f"[uploader] video {video['id']} already claimed by another runner, skip")
+                continue
+
             try:
                 description = script["youtube_description"] or ""
 
@@ -303,4 +315,10 @@ class YouTubeUploader:
                 self._delete_supabase_assets(video)
                 print(f"[uploader] uploaded {yt_id} ({video['video_type']})")
             except Exception as e:
+                try:
+                    execute_with_retry(
+                        self._sb.table("videos").update({"status": "approved"}).eq("id", video["id"])
+                    )
+                except Exception:
+                    pass
                 print(f"[uploader] failed for video {video['id']}: {e}")

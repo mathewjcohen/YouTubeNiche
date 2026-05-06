@@ -57,6 +57,46 @@ class GoogleNewsAdapter:
         return items
 
 
+class NewsAPIAdapter:
+    def __init__(self, api_key: str):
+        self._api_key = api_key
+
+    def fetch(self, keyword: str, days: int = 2) -> List[NewsItem]:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        for attempt in range(2):
+            resp = requests.get(
+                "https://newsapi.org/v2/everything",
+                params={"q": keyword, "sortBy": "publishedAt", "language": "en", "pageSize": 20},
+                headers={"X-Api-Key": self._api_key},
+                timeout=10,
+            )
+            if resp.status_code == 429:
+                if attempt == 0:
+                    time.sleep(5)
+                    continue
+                return []
+            resp.raise_for_status()
+            items = []
+            for article in resp.json().get("articles", [])[:20]:
+                url = article.get("url", "")
+                published_str = article.get("publishedAt", "")
+                if not url or not published_str:
+                    continue
+                published_at = datetime.fromisoformat(published_str.replace("Z", "+00:00"))
+                if published_at < cutoff:
+                    continue
+                items.append(NewsItem(
+                    source_type="newsapi",
+                    source_id=url,
+                    title=article.get("title", ""),
+                    url=url,
+                    published_at=published_at,
+                    keywords_matched=[keyword],
+                ))
+            return items
+        return []
+
+
 def load_news_keywords() -> dict:
     path = Path(__file__).parent.parent.parent / "config" / "news_keywords.json"
     return json.loads(path.read_text())

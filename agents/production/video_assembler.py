@@ -10,6 +10,7 @@ if not hasattr(PIL.Image, "ANTIALIAS"):
     PIL.Image.ANTIALIAS = PIL.Image.LANCZOS  # removed in Pillow 10, moviepy 1.x needs it
 
 import boto3
+import botocore.exceptions
 import requests
 from moviepy.editor import (
     VideoFileClip, AudioFileClip, concatenate_videoclips,
@@ -235,5 +236,13 @@ class VideoAssembler:
                 )
                 print(f"[assembler] video {video['id']} assembled → {out_path} (gate6={gate6_state})")
                 self._delete_voiceover_assets(video)
+            except botocore.exceptions.ClientError as exc:
+                code = exc.response.get("Error", {}).get("Code", "")
+                if code in ("404", "NoSuchKey"):
+                    print(f"[assembler] video {video['id']} audio permanently missing (S3 404) — deleting row and resetting script")
+                    execute_with_retry(self._sb.table("videos").delete().eq("id", video["id"]))
+                    execute_with_retry(self._sb.table("scripts").update({"status": "pending"}).eq("id", video["script_id"]))
+                else:
+                    print(f"[assembler] video {video['id']} S3 error, will retry next run: {exc}")
             except Exception as exc:
                 print(f"[assembler] video {video['id']} failed, will retry next run: {exc}")

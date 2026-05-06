@@ -62,3 +62,28 @@ def test_score_returns_one_when_trend_mean_is_zero(scorer):
         result = scorer.score("zeroed niche", category="career", subreddits=["careeradvice"])
     # When overall trend mean is 0, trend_score should be 1.0 (neutral fallback)
     assert result.trend_score == 1.0
+
+
+def test_news_velocity_normalizes_article_count():
+    mock_yt = MagicMock()
+    mock_reddit = MagicMock()
+    mock_adapter = MagicMock()
+    mock_adapter.fetch.return_value = [MagicMock()] * 10  # 10 articles
+    scorer = NicheScorer(
+        youtube_client=mock_yt,
+        reddit_scraper=mock_reddit,
+        news_adapters=[mock_adapter],
+    )
+    result = scorer.news_velocity("personal finance")
+    assert result == 0.5  # 10/20 = 0.5
+
+
+def test_news_velocity_returns_zero_on_adapter_failure():
+    mock_adapter = MagicMock()
+    mock_adapter.fetch.side_effect = RuntimeError("adapter down")
+    scorer = NicheScorer(
+        youtube_client=MagicMock(),
+        reddit_scraper=MagicMock(),
+        news_adapters=[mock_adapter],
+    )
+    assert scorer.news_velocity("any keyword") == 0.0

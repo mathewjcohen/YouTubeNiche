@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, List
+from typing import Any, List, Optional
 from pytrends.request import TrendReq
 from agents.discovery.youtube_client import YouTubeClient
 from agents.discovery.reddit_scraper import RedditScraper
@@ -16,13 +16,20 @@ class NicheScoreResult:
     reddit_activity: float
     youtube_competition: float
     avg_rpm: float
+    news_score: float = 0.0
     details: dict = field(default_factory=dict)
 
 
 class NicheScorer:
-    def __init__(self, youtube_client: YouTubeClient, reddit_scraper: RedditScraper):
+    def __init__(
+        self,
+        youtube_client: YouTubeClient,
+        reddit_scraper: RedditScraper,
+        news_adapters: Optional[List] = None,
+    ):
         self._yt = youtube_client
         self._reddit = reddit_scraper
+        self._news_adapters = news_adapters or []
 
     def score(
         self,
@@ -44,6 +51,9 @@ class NicheScorer:
         else:
             final_score = avg_rpm * trend_score * reddit_activity
 
+        news_score = self.news_velocity(niche_name)
+        final_score = final_score * (1 + 0.15 * news_score)
+
         return NicheScoreResult(
             niche_name=niche_name,
             category=category,
@@ -54,6 +64,7 @@ class NicheScorer:
             reddit_activity=reddit_activity,
             youtube_competition=competition_score,
             avg_rpm=avg_rpm,
+            news_score=news_score,
             details={
                 "yt_video_count": len(yt_videos),
                 "yt_source": yt_videos[0].source if yt_videos else "rpm_proxy",
@@ -99,3 +110,14 @@ class NicheScorer:
         # Higher avg views = more established competition = harder
         # Normalize to 1–10 scale (10M views ceiling)
         return round(min(avg_views / 100000, 10.0), 2)
+
+    def news_velocity(self, keyword: str, days: int = 10) -> float:
+        """Returns normalized article count: 0.0 (none) to 1.0 (20+ articles)."""
+        total = 0
+        for adapter in self._news_adapters:
+            try:
+                items = adapter.fetch(keyword, days=days)
+                total += len(items)
+            except Exception:
+                pass
+        return round(min(total / 20.0, 1.0), 2)

@@ -30,10 +30,11 @@ class PipelineRunner:
             print("[pipeline] paused via dashboard — exiting")
             return
 
+        # Promoted niches first so they aren't starved by testing niches consuming the time budget
         active_niches = execute_with_retry(
-            self._sb.table("niches").select("*, youtube_accounts(channel_id)").eq("status", "testing")
-        ).data + execute_with_retry(
             self._sb.table("niches").select("*, youtube_accounts(channel_id)").eq("status", "promoted")
+        ).data + execute_with_retry(
+            self._sb.table("niches").select("*, youtube_accounts(channel_id)").eq("status", "testing")
         ).data
         print(f"[pipeline] {len(active_niches)} active niche(s) found")
         for niche in active_niches:
@@ -60,11 +61,9 @@ class PipelineRunner:
                 .eq("niche_id", niche_id).eq("gate3_state", "approved").eq("status", "pending")
             ).data
             print(f"[pipeline]   approved_scripts={len(approved_scripts)}")
-            # Voiceover runs first so video rows exist before thumbnail_gen looks for them
-            if approved_scripts:
-                self._run_voiceover(niche)
-            else:
-                print(f"[pipeline]   skipping voiceover — no approved scripts with status=pending")
+            # Always run voiceover — the self-heal inside resets stuck-processing scripts
+            # even when approved_scripts=0, then re-queries and picks them up in the same call
+            self._run_voiceover(niche)
             # Re-query after voiceover may have created new rows
             missing_thumbs = execute_with_retry(
                 self._sb.table("videos").select("id")

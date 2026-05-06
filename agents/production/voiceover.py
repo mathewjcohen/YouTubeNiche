@@ -267,14 +267,12 @@ class VoiceoverAgent:
                 words = self._synthesize_openai(text, audio_path, voice)
                 srt_content = build_srt(words)
                 srt_path.write_text(srt_content, encoding="utf-8")
-                # Music mixing disabled — background music triggers YouTube Content ID claims.
-                # Re-enable only with confirmed royalty-free tracks (e.g. YouTube Audio Library).
-                # music_path_candidate = MUSIC_DIR / CATEGORY_MUSIC.get(category.lower(), DEFAULT_MUSIC)
-                # if music_path_candidate.exists():
-                #     try:
-                #         _mix_music(audio_path, music_path_candidate)
-                #     except Exception as exc:
-                #         print(f"[voiceover] music mix failed, using dry audio: {exc}")
+                music_path_candidate = MUSIC_DIR / CATEGORY_MUSIC.get(category.lower(), DEFAULT_MUSIC)
+                if music_path_candidate.exists():
+                    try:
+                        _mix_music(audio_path, music_path_candidate)
+                    except Exception as exc:
+                        print(f"[voiceover] music mix failed, using dry audio: {exc}")
                 return audio_path, srt_path
             except Exception as exc:
                 last_exc = exc

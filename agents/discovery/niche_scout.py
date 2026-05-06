@@ -1,9 +1,11 @@
 import os
-from typing import List
+import json
+from typing import Dict, List, Optional
 from supabase import Client, create_client
 from agents.discovery.niche_scorer import NicheScorer, NicheScoreResult
 from agents.discovery.youtube_client import YouTubeClient
 from agents.discovery.reddit_scraper import RedditScraper
+from agents.discovery.news_scraper import GoogleNewsAdapter, NewsAPIAdapter, load_news_keywords
 from agents.shared.gate_client import GateClient
 from agents.shared.config_loader import get_env, get_subreddits
 from agents.shared.db_retry import execute_with_retry, patch_postgrest_http1
@@ -22,10 +24,19 @@ CATEGORY_QUERIES = {
 
 
 class NicheScout:
-    def __init__(self, supabase: Client, scorer: NicheScorer, gate_client: GateClient):
+    def __init__(
+        self,
+        supabase: Client,
+        scorer: NicheScorer,
+        gate_client: GateClient,
+        news_adapters: Optional[List] = None,
+        news_keywords: Optional[Dict] = None,
+    ):
         self._sb = supabase
         self._scorer = scorer
         self._gate = gate_client
+        self._news_adapters = news_adapters or []
+        self._news_keywords = news_keywords or {}
 
     def run(self) -> None:
         subreddits_map = get_subreddits()
@@ -43,6 +54,27 @@ class NicheScout:
                 print(f"[scout] {category}: score={result.final_score}")
             except Exception as e:
                 print(f"[scout] failed to score {category}: {e}")
+
+        # Pass 2: news-velocity niche discovery
+        if self._news_adapters and self._news_keywords:
+            seen_candidates = {r.niche_name for r in results}
+            for category, keywords in self._news_keywords.items():
+                for keyword in keywords:
+                    total = 0
+                    for adapter in self._news_adapters:
+                        try:
+                            items = adapter.fetch(keyword, days=2)
+                            total += len(items)
+                        except Exception as e:
+                            print(f"[scout] news adapter failed for '{keyword}': {e}")
+                    if total >= 5 and keyword not in existing and keyword not in seen_candidates:
+                        try:
+                            result = self._scorer.score(keyword, category=category, subreddits=[])
+                            results.append(result)
+                            seen_candidates.add(keyword)
+                            print(f"[scout] news candidate '{keyword}': score={result.final_score}")
+                        except Exception as e:
+                            print(f"[scout] failed to score news candidate '{keyword}': {e}")
 
         results.sort(key=lambda r: r.final_score, reverse=True)
         inserted = 0
@@ -71,9 +103,22 @@ def main():
     sb = patch_postgrest_http1(create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY")))
     yt = YouTubeClient(rapidapi_key=os.getenv("RAPIDAPI_KEY", ""))
     reddit = RedditScraper()
-    scorer = NicheScorer(youtube_client=yt, reddit_scraper=reddit)
+
+    news_adapters: List = [GoogleNewsAdapter()]
+    newsapi_key = os.getenv("NEWSAPI_KEY")
+    if newsapi_key:
+        news_adapters.append(NewsAPIAdapter(api_key=newsapi_key))
+    news_kws = load_news_keywords()
+
+    scorer = NicheScorer(youtube_client=yt, reddit_scraper=reddit, news_adapters=news_adapters)
     gate = GateClient(sb)
-    scout = NicheScout(supabase=sb, scorer=scorer, gate_client=gate)
+    scout = NicheScout(
+        supabase=sb,
+        scorer=scorer,
+        gate_client=gate,
+        news_adapters=news_adapters,
+        news_keywords=news_kws,
+    )
     scout.run()
 
 

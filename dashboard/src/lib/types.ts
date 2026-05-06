@@ -19,6 +19,14 @@ export interface BrandPackage {
 
 export type ChannelState = 'unconfigured' | 'linked'
 
+export interface NicheScoreDetails {
+  rpm: number
+  trend: number
+  reddit: number
+  competition: number
+  news: number
+}
+
 export interface Niche {
   id: string
   name: string
@@ -27,6 +35,9 @@ export interface Niche {
   gate1_state: GateState
   niche_source: NicheSource
   score: number | null
+  score_details: NicheScoreDetails | null
+  rpm_min: number | null
+  rpm_max: number | null
   brand_package: BrandPackage | null
   activated_at: string | null
   created_at: string

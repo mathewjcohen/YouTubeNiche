@@ -89,6 +89,13 @@ class NicheScout:
                     "score": r.final_score,
                     "rpm_min": r.rpm_min,
                     "rpm_max": r.rpm_max,
+                    "score_details": {
+                        "rpm": round(r.avg_rpm, 2),
+                        "trend": r.trend_score,
+                        "reddit": r.reddit_activity,
+                        "competition": r.youtube_competition,
+                        "news": r.news_score,
+                    },
                     "subreddits": subreddits_map.get(r.category, []),
                     "niche_source": "scout",
                     "gate1_state": "awaiting_review",

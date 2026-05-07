@@ -239,9 +239,9 @@ class VideoAssembler:
             except botocore.exceptions.ClientError as exc:
                 code = exc.response.get("Error", {}).get("Code", "")
                 if code in ("404", "NoSuchKey"):
-                    print(f"[assembler] video {video['id']} audio permanently missing (S3 404) — deleting row and resetting script")
+                    print(f"[assembler] video {video['id']} audio permanently missing (S3 404) — marking assembly_failed")
                     execute_with_retry(self._sb.table("videos").delete().eq("id", video["id"]))
-                    execute_with_retry(self._sb.table("scripts").update({"status": "pending"}).eq("id", video["script_id"]))
+                    execute_with_retry(self._sb.table("scripts").update({"status": "assembly_failed"}).eq("id", video["script_id"]))
                 else:
                     print(f"[assembler] video {video['id']} S3 error, will retry next run: {exc}")
             except Exception as exc:

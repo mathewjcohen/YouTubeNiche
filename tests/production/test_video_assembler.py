@@ -43,7 +43,13 @@ def test_s3_404_sets_assembly_failed_not_pending():
     import botocore.exceptions
     from agents.production.video_assembler import VideoAssembler, PexelsClient
 
+    # Separate mocks per table so we can verify calls independently
+    videos_table = MagicMock()
+    scripts_table = MagicMock()
+
     mock_sb = MagicMock()
+    mock_sb.table.side_effect = lambda name: videos_table if name == "videos" else scripts_table
+
     mock_gate = MagicMock()
     pexels = MagicMock(spec=PexelsClient)
 
@@ -60,7 +66,7 @@ def test_s3_404_sets_assembly_failed_not_pending():
     }
 
     # videos query returns our test video
-    mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value.data = [video]
+    videos_table.select.return_value.eq.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value.data = [video]
 
     # assemble() raises S3 404
     s3_error = botocore.exceptions.ClientError(
@@ -69,8 +75,11 @@ def test_s3_404_sets_assembly_failed_not_pending():
     with patch.object(assembler, "assemble", side_effect=s3_error):
         assembler.process_approved_voiceovers("niche-1")
 
-    # Verify scripts.status was set to assembly_failed (not pending)
-    update_calls = mock_sb.table.return_value.update.call_args_list
+    # Video row must be deleted
+    videos_table.delete.assert_called()
+
+    # Script status must be set to assembly_failed (not pending)
+    update_calls = scripts_table.update.call_args_list
     status_values = [c.args[0].get("status") for c in update_calls if c.args and "status" in c.args[0]]
     assert "assembly_failed" in status_values, f"Expected assembly_failed in status updates, got: {status_values}"
     assert "pending" not in status_values, "Must not reset to pending — that burns OpenAI quota"

@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 from supabase import Client
 from agents.shared.gate_client import GateClient, GateNumber
 from agents.shared.db_retry import execute_with_retry
@@ -299,34 +299,50 @@ class VoiceoverAgent:
     # GHA fast job timeout is 55 min (3300s); one TTS call can take ~5 min.
     _BUDGET_SECS = 45 * 60  # 45 minutes
 
-    def process_approved_scripts(self, niche_id: str) -> None:
+    def process_approved_scripts(self, niche_id: str, limit: Optional[int] = None) -> None:
         # Self-heal: scripts stuck in 'processing' for >2h never recovered on their own.
         # Reset them so the next run picks them up again.
+        # BUT: skip scripts that have video rows — they're actively being assembled.
         try:
             stale_cutoff = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
-            recovered = execute_with_retry(
+            stale = execute_with_retry(
                 self._sb.table("scripts")
-                .update({"status": "pending"})
+                .select("id")
                 .eq("niche_id", niche_id)
                 .eq("status", "processing")
                 .lt("updated_at", stale_cutoff)
             ).data
-            if recovered:
-                print(f"[voiceover] reset {len(recovered)} stuck-processing script(s) for niche {niche_id}")
+            reset_count = 0
+            for s in stale:
+                video_rows = execute_with_retry(
+                    self._sb.table("videos").select("id").eq("script_id", s["id"]).limit(1)
+                ).data
+                if not video_rows:
+                    execute_with_retry(
+                        self._sb.table("scripts")
+                        .update({"status": "pending"})
+                        .eq("id", s["id"])
+                    )
+                    reset_count += 1
+            if reset_count:
+                print(f"[voiceover] reset {reset_count} stuck-processing script(s) for niche {niche_id}")
         except Exception as e:
-            print(f"[voiceover] stuck-script reset skipped (migration pending?): {e}")
+            print(f"[voiceover] stuck-script reset skipped: {e}")
 
         niche_rows = execute_with_retry(
             self._sb.table("niches").select("category").eq("id", niche_id).limit(1)
         ).data
         category = niche_rows[0]["category"] if niche_rows else ""
-        scripts = execute_with_retry(
+        query = (
             self._sb.table("scripts")
             .select("*")
             .eq("niche_id", niche_id)
             .eq("gate3_state", "approved")
             .eq("status", "pending")
-        ).data
+        )
+        if limit is not None:
+            query = query.limit(limit)
+        scripts = execute_with_retry(query).data
         budget_start = time.monotonic()
         for script in scripts:
             if time.monotonic() - budget_start > self._BUDGET_SECS:

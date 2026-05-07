@@ -186,12 +186,17 @@ class ThumbnailGenerator:
         return out_path
 
     def _upload(self, local_path: Path) -> str:
-        self._sb.storage.from_("thumbnails").upload(
-            local_path.name,
-            local_path.read_bytes(),
-            {"content-type": "image/jpeg", "upsert": "true"},
+        import boto3
+        bucket = get_env("AWS_S3_BUCKET")
+        region = get_env("REMOTION_REGION")
+        key = f"thumbnails/{local_path.name}"
+        boto3.client("s3", region_name=region).upload_file(
+            str(local_path),
+            bucket,
+            key,
+            ExtraArgs={"ContentType": "image/jpeg"},
         )
-        return self._sb.storage.from_("thumbnails").get_public_url(local_path.name)
+        return f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
 
     def process_approved_scripts(self, niche_id: str) -> None:
         if not self._sb or not self._gate:

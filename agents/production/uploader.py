@@ -156,9 +156,13 @@ class YouTubeUploader:
                 if key:
                     _remove("voiceovers", [key])
 
-        key = _key_from_url(video.get("thumbnail_path"), "thumbnails")
-        if key:
-            _remove("thumbnails", [key])
+        thumb_url = video.get("thumbnail_path") or ""
+        if ".amazonaws.com/" in thumb_url:
+            self._delete_s3_video(thumb_url)
+        else:
+            key = _key_from_url(thumb_url, "thumbnails")
+            if key:
+                _remove("thumbnails", [key])
 
         # B-roll count varies with number of [BROLL:] tags in the script — discover by prefix
         video_id = video.get("id", "")

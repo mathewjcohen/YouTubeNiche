@@ -245,8 +245,8 @@ class YouTubeUploader:
             .eq("status", "approved")
         ).data
 
-        # Always upload longs before shorts so the link is available
-        videos.sort(key=lambda v: 0 if v["video_type"] == "long" else 1)
+        # Upload long+short as a pair per script: long first so the link is available for the short
+        videos.sort(key=lambda v: (v["script_id"], 0 if v["video_type"] == "long" else 1))
 
         # Track long video IDs uploaded this run: script_id → youtube_video_id
         long_yt_ids: Dict[str, str] = {}

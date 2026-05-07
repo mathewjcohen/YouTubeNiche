@@ -562,6 +562,113 @@ class AnalyticsPoller:
                 f"({retention_count} with retention) for niche {niche_id}"
             )
 
+    def _discover_channel_orphans(
+        self,
+        yt_service,
+        channel_id: str,
+        niche_infos: list[dict],
+        all_known_ids: set[str],
+    ) -> int:
+        """Find videos on a YouTube channel not tracked in published_videos.
+
+        For single-niche channels all orphans are assigned to that niche.
+        For multi-niche channels each orphan is matched to the niche whose script
+        title has the highest word-overlap with the YouTube video title; skipped
+        when no confident match is found (avoids cross-niche contamination).
+        """
+        try:
+            ch_resp = yt_service.channels().list(part="contentDetails", id=channel_id).execute()
+        except Exception as e:
+            print(f"[analytics] channel lookup failed for {channel_id} (non-fatal): {e}")
+            return 0
+
+        ch_items = ch_resp.get("items", [])
+        if not ch_items:
+            return 0
+        uploads_playlist_id = ch_items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
+
+        orphaned_ids: list[str] = []
+        page_token: Optional[str] = None
+        while True:
+            try:
+                resp = yt_service.playlistItems().list(
+                    part="contentDetails",
+                    playlistId=uploads_playlist_id,
+                    maxResults=50,
+                    pageToken=page_token,
+                ).execute()
+            except Exception as e:
+                print(f"[analytics] uploads playlist fetch failed for {channel_id} (non-fatal): {e}")
+                break
+            for item in resp.get("items", []):
+                vid_id = item["contentDetails"]["videoId"]
+                if vid_id not in all_known_ids:
+                    orphaned_ids.append(vid_id)
+            page_token = resp.get("nextPageToken")
+            if not page_token:
+                break
+
+        if not orphaned_ids:
+            return 0
+
+        metadata = self._fetch_video_metadata(yt_service, orphaned_ids)
+        if not metadata:
+            return 0
+
+        rows: list[dict] = []
+        is_single_niche = len(niche_infos) == 1
+
+        if is_single_niche:
+            niche_id = niche_infos[0]["id"]
+            for vid_id, meta in metadata.items():
+                dur = meta.get("duration_sec") or 0
+                rows.append({
+                    "niche_id": niche_id,
+                    "youtube_video_id": vid_id,
+                    "video_type": "short" if 0 < dur <= 60 else "long",
+                    "title": meta.get("title"),
+                    "duration_sec": meta.get("duration_sec"),
+                    "status": "live",
+                })
+        else:
+            niche_ids = [n["id"] for n in niche_infos]
+            script_rows = execute_with_retry(
+                self._sb.table("scripts").select("id, niche_id, title").in_("niche_id", niche_ids)
+            ).data
+            niche_name_map = {n["id"]: n["name"] for n in niche_infos}
+            for vid_id, meta in metadata.items():
+                vid_words = set((meta.get("title") or "").lower().split())
+                best_script = None
+                best_score = 0.0
+                for s in script_rows:
+                    s_words = set((s.get("title") or "").lower().split())
+                    if not vid_words or not s_words:
+                        continue
+                    score = len(vid_words & s_words) / max(len(vid_words), len(s_words))
+                    if score > best_score:
+                        best_score = score
+                        best_script = s
+                if best_script and best_score >= 0.5:
+                    dur = meta.get("duration_sec") or 0
+                    rows.append({
+                        "niche_id": best_script["niche_id"],
+                        "script_id": best_script["id"],
+                        "youtube_video_id": vid_id,
+                        "video_type": "short" if 0 < dur <= 60 else "long",
+                        "title": meta.get("title"),
+                        "duration_sec": meta.get("duration_sec"),
+                        "status": "live",
+                    })
+                    niche_name = niche_name_map.get(best_script["niche_id"], "?")
+                    print(f"[analytics] attributed orphan {vid_id} → niche '{niche_name}' (score={best_score:.2f})")
+                else:
+                    title_preview = (meta.get("title") or "")[:50]
+                    print(f"[analytics] cannot attribute orphan {vid_id} '{title_preview}' (score={best_score:.2f}), skipping")
+
+        if rows:
+            execute_with_retry(self._sb.table("published_videos").insert(rows))
+        return len(rows)
+
     def run(self) -> None:
         active_niches = execute_with_retry(
             self._sb.table("niches")
@@ -570,6 +677,9 @@ class AnalyticsPoller:
         ).data
 
         failures = []
+        # Collect per-channel info so we can run orphan discovery once per channel after the niche loop
+        channel_info: dict[str, dict] = {}  # channel_id → {yt_service, niche_infos: [{id, name}]}
+
         for niche in active_niches:
             account = niche.get("youtube_accounts") or {}
             channel_id = account.get("channel_id")
@@ -581,6 +691,9 @@ class AnalyticsPoller:
             try:
                 print(f"[analytics] polling: {niche['name']} ({niche['status']})")
                 yt_service, analytics = self._build_analytics_service(token_json)
+                if channel_id not in channel_info:
+                    channel_info[channel_id] = {"yt_service": yt_service, "niche_infos": []}
+                channel_info[channel_id]["niche_infos"].append({"id": niche["id"], "name": niche["name"]})
 
                 end_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
                 start_date = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
@@ -598,6 +711,9 @@ class AnalyticsPoller:
                     print(f"[analytics] recovered {found} missing pipeline video(s) for niche {niche['name']}")
                 # Re-fetch so poll_niche sees full up-to-date set
                 published_rows = self._fetch_published_videos(niche["id"])
+                # Backfill metadata for any rows that recovery just inserted
+                if found:
+                    self._backfill_published_video_metadata(yt_service, niche["id"], published_rows)
 
                 perf = self.poll_niche(niche["id"], channel_id, analytics, yt_service, [])
                 if not perf:
@@ -653,6 +769,23 @@ class AnalyticsPoller:
             except Exception as e:
                 print(f"[analytics] failed to poll niche {niche['id']}: {e}")
                 failures.append(niche["id"])
+
+        # Channel-level discovery: find videos on YouTube not yet in published_videos
+        # (handles uploads that pre-date the current pipeline or had DB write failures)
+        for ch_id, info in channel_info.items():
+            try:
+                all_ids: set[str] = set()
+                for niche_info in info["niche_infos"]:
+                    all_ids.update(
+                        r["youtube_video_id"] for r in self._fetch_published_videos(niche_info["id"])
+                    )
+                found = self._discover_channel_orphans(
+                    info["yt_service"], ch_id, info["niche_infos"], all_ids
+                )
+                if found:
+                    print(f"[analytics] discovered {found} orphaned video(s) on channel {ch_id}")
+            except Exception as e:
+                print(f"[analytics] orphan discovery failed for channel {ch_id} (non-fatal): {e}")
 
         if failures:
             raise RuntimeError(f"[analytics] polling failed for {len(failures)} niche(s): {failures}")

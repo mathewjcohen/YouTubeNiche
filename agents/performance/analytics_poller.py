@@ -407,82 +407,42 @@ class AnalyticsPoller:
         if changed:
             print(f"[analytics] synced {changed} status change(s) for niche {niche_id}")
 
-    def _discover_channel_videos(
+    def _recover_pipeline_videos(
         self,
-        yt_service,
         niche_id: str,
         known_ids: set[str],
     ) -> int:
-        """Insert published_videos rows for channel videos not already tracked."""
-        try:
-            ch_resp = yt_service.channels().list(part="contentDetails", mine=True).execute()
-            items = ch_resp.get("items", [])
-            if not items:
-                return 0
-            uploads_playlist = items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
-        except Exception as e:
-            print(f"[analytics] uploads playlist fetch failed (non-fatal): {e}")
+        """Insert published_videos rows for pipeline uploads missing from the table.
+
+        Looks for rows in the `videos` table that have youtube_video_id set
+        (uploaded successfully) but have no matching published_videos row.
+        These get the correct niche_id and script_id from the source row.
+        """
+        video_rows = execute_with_retry(
+            self._sb.table("videos")
+            .select("script_id, niche_id, video_type, youtube_video_id")
+            .eq("niche_id", niche_id)
+            .not_.is_("youtube_video_id", "null")
+        ).data
+
+        missing = [v for v in video_rows if v["youtube_video_id"] not in known_ids]
+        if not missing:
             return 0
 
-        new_ids: list[str] = []
-        page_token = None
-        while True:
-            try:
-                kwargs: dict = dict(
-                    part="contentDetails",
-                    playlistId=uploads_playlist,
-                    maxResults=50,
-                )
-                if page_token:
-                    kwargs["pageToken"] = page_token
-                resp = yt_service.playlistItems().list(**kwargs).execute()
-            except Exception as e:
-                print(f"[analytics] playlist pagination failed (non-fatal): {e}")
-                break
-            for item in resp.get("items", []):
-                vid_id = item["contentDetails"]["videoId"]
-                if vid_id not in known_ids:
-                    new_ids.append(vid_id)
-            page_token = resp.get("nextPageToken")
-            if not page_token:
-                break
-
-        if not new_ids:
-            return 0
-
-        discovered = 0
-        for i in range(0, len(new_ids), 50):
-            batch = new_ids[i : i + 50]
-            try:
-                meta_resp = yt_service.videos().list(
-                    part="snippet,contentDetails",
-                    id=",".join(batch),
-                ).execute()
-            except Exception as e:
-                print(f"[analytics] metadata fetch for discovered videos failed (non-fatal): {e}")
-                continue
-            rows = []
-            for item in meta_resp.get("items", []):
-                dur = _parse_iso_duration(item["contentDetails"]["duration"])
-                rows.append({
-                    "niche_id": niche_id,
-                    "script_id": None,
-                    "youtube_video_id": item["id"],
-                    "video_type": "short" if dur <= 60 else "long",
-                    "title": item["snippet"]["title"],
-                    "duration_sec": dur,
-                    "status": "live",
-                })
-            if rows:
-                try:
-                    execute_with_retry(self._sb.table("published_videos").insert(rows))
-                    for r in rows:
-                        print(f"[analytics] discovered {r['video_type']}: {r['title'][:70]}")
-                    discovered += len(rows)
-                except Exception as e:
-                    print(f"[analytics] insert discovered videos failed (non-fatal): {e}")
-
-        return discovered
+        rows = [
+            {
+                "niche_id": v["niche_id"],
+                "script_id": v["script_id"],
+                "youtube_video_id": v["youtube_video_id"],
+                "video_type": v["video_type"],
+                "status": "live",
+            }
+            for v in missing
+        ]
+        execute_with_retry(self._sb.table("published_videos").insert(rows))
+        for v in missing:
+            print(f"[analytics] recovered pipeline video: {v['youtube_video_id']} ({v['video_type']})")
+        return len(rows)
 
     def _aggregate(self, video_metrics: dict[str, dict]) -> tuple[int, float, float, float, int]:
         """Aggregate metrics across a set of videos.
@@ -633,9 +593,9 @@ class AnalyticsPoller:
                 self._sync_published_videos(yt_service, niche["id"], published_rows)
                 # Discover videos on the channel not yet in published_videos
                 known_ids = {r["youtube_video_id"] for r in published_rows}
-                found = self._discover_channel_videos(yt_service, niche["id"], known_ids)
+                found = self._recover_pipeline_videos(niche["id"], known_ids)
                 if found:
-                    print(f"[analytics] added {found} discovered video(s) for niche {niche['name']}")
+                    print(f"[analytics] recovered {found} missing pipeline video(s) for niche {niche['name']}")
                 # Re-fetch so poll_niche sees full up-to-date set
                 published_rows = self._fetch_published_videos(niche["id"])
 

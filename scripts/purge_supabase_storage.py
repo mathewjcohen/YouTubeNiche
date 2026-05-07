@@ -5,6 +5,10 @@ Voiceovers: delete any file whose video row has an S3 audio_path (amazonaws.com)
             Files still referenced by Supabase audio_path URLs are kept.
             Files with no matching video row (true orphans) are also deleted.
 
+Videos:     delete assembled MP4s whose video row now has an S3 video_path.
+            Legacy files from before the S3 migration are cleared here.
+            Files still referenced by a Supabase video_path URL are kept.
+
 Thumbnails: delete thumbnails for videos already uploaded to YouTube
             (youtube_video_id IS NOT NULL). Thumbnails for pending videos are kept
             so the uploader can still set them.
@@ -93,6 +97,31 @@ def purge_voiceovers(sb, dry_run: bool) -> int:
     return delete_batch(sb, "voiceovers", to_delete, dry_run)
 
 
+def purge_videos(sb, dry_run: bool) -> int:
+    print("--- videos ---")
+    all_files = list_bucket(sb, "videos")
+    print(f"  {len(all_files)} file(s) in bucket")
+
+    videos = (
+        sb.table("videos")
+        .select("video_path")
+        .execute()
+        .data
+    )
+
+    # Keep files where the video row still references a Supabase URL
+    supabase_kept: set[str] = set()
+    for v in videos:
+        url = v.get("video_path") or ""
+        if "supabase" in url:
+            supabase_kept.add(filename_from_url(url))
+
+    to_delete = [f for f in all_files if f not in supabase_kept]
+    print(f"  {len(supabase_kept)} file(s) still referenced via Supabase URL (kept)")
+    print(f"  {len(to_delete)} file(s) to delete (S3-migrated or orphaned)")
+    return delete_batch(sb, "videos", to_delete, dry_run)
+
+
 def purge_thumbnails(sb, dry_run: bool) -> int:
     print("--- thumbnails ---")
     all_files = list_bucket(sb, "thumbnails")
@@ -134,12 +163,15 @@ def main() -> None:
 
     v_deleted = purge_voiceovers(sb, dry_run)
     print()
+    vid_deleted = purge_videos(sb, dry_run)
+    print()
     t_deleted = purge_thumbnails(sb, dry_run)
     print()
 
     if not dry_run:
         print("=== Summary ===")
         print(f"  voiceovers  {v_deleted} deleted")
+        print(f"  videos      {vid_deleted} deleted")
         print(f"  thumbnails  {t_deleted} deleted")
     else:
         print("Re-run with --execute to apply.")

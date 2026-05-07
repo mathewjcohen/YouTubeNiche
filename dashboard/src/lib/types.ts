@@ -212,3 +212,9 @@ export interface Insight {
   stats_json: InsightStats
   summary_text: string
 }
+
+export interface ScoreHistoryRow {
+  niche_name: string
+  final_score: number
+  recorded_at: string
+}

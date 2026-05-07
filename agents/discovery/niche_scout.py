@@ -77,6 +77,24 @@ class NicheScout:
                             print(f"[scout] failed to score news candidate '{keyword}': {e}")
 
         results.sort(key=lambda r: r.final_score, reverse=True)
+
+        if results:
+            execute_with_retry(self._sb.table("niche_score_history").insert([
+                {
+                    "niche_name": r.niche_name,
+                    "category": r.category,
+                    "final_score": r.final_score,
+                    "score_details": {
+                        "rpm": round(r.avg_rpm, 2),
+                        "trend": r.trend_score,
+                        "reddit": r.reddit_activity,
+                        "competition": r.youtube_competition,
+                        "news": r.news_score,
+                    },
+                }
+                for r in results
+            ]))
+
         inserted = 0
         for r in results[:5]:
             if r.niche_name in existing:

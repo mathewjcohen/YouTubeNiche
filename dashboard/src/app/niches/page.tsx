@@ -3,7 +3,8 @@ import { StatusPill } from '@/components/status-pill'
 import { ScoreTooltip } from '@/components/score-tooltip'
 import { Form, SubmitButton } from '@/components/form'
 import { activateNiche, dismissNiche, archiveNiche, promoteNiche, submitManualNiche } from '@/app/actions/niches'
-import type { Niche, NicheStatus, NicheScoreDetails } from '@/lib/types'
+import { NicheScoreChart } from '@/components/niche-score-chart'
+import type { Niche, NicheStatus, NicheScoreDetails, ScoreHistoryRow } from '@/lib/types'
 
 const CATEGORIES = [
   'Legal / rights', 'Insurance', 'Tax / accounting', 'Personal finance',
@@ -17,16 +18,26 @@ const STATUS_ORDER: NicheStatus[] = ['candidate', 'testing', 'promoted', 'archiv
 
 export default async function NichesPage() {
   const supabase = await createClient()
-  const { data: niches } = await supabase
-    .from('niches')
-    .select('*, youtube_accounts(channel_name, channel_id)')
-    .order('score', { ascending: false })
+  const [{ data: niches }, { data: historyRows }] = await Promise.all([
+    supabase
+      .from('niches')
+      .select('*, youtube_accounts(channel_name, channel_id)')
+      .order('score', { ascending: false }),
+    supabase
+      .from('niche_score_history')
+      .select('niche_name, final_score, recorded_at')
+      .gte('recorded_at', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
+      .order('recorded_at', { ascending: true }),
+  ])
 
   const grouped = STATUS_ORDER.reduce<Record<NicheStatus, Niche[]>>(
     (acc, s) => ({ ...acc, [s]: [] }),
     {} as Record<NicheStatus, Niche[]>
   )
   for (const n of niches ?? []) grouped[n.status as NicheStatus].push(n as Niche)
+
+  const history = (historyRows ?? []) as ScoreHistoryRow[]
+  const nicheNames = Array.from(new Set(history.map((r) => r.niche_name)))
 
   return (
     <div className="space-y-8">
@@ -66,6 +77,11 @@ export default async function NichesPage() {
         <p className="text-xs text-gray-600 mt-2">
           Triggers GitHub Actions. Result appears below in ~2 min.
         </p>
+      </section>
+
+      <section className="bg-gray-800 border border-gray-700 rounded-lg p-5">
+        <h2 className="font-semibold mb-4 text-gray-100">Score Trends</h2>
+        <NicheScoreChart history={history} nicheNames={nicheNames} />
       </section>
 
       {STATUS_ORDER.map((status) => (

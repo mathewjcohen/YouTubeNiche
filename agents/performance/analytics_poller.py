@@ -407,6 +407,83 @@ class AnalyticsPoller:
         if changed:
             print(f"[analytics] synced {changed} status change(s) for niche {niche_id}")
 
+    def _discover_channel_videos(
+        self,
+        yt_service,
+        niche_id: str,
+        known_ids: set[str],
+    ) -> int:
+        """Insert published_videos rows for channel videos not already tracked."""
+        try:
+            ch_resp = yt_service.channels().list(part="contentDetails", mine=True).execute()
+            items = ch_resp.get("items", [])
+            if not items:
+                return 0
+            uploads_playlist = items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
+        except Exception as e:
+            print(f"[analytics] uploads playlist fetch failed (non-fatal): {e}")
+            return 0
+
+        new_ids: list[str] = []
+        page_token = None
+        while True:
+            try:
+                kwargs: dict = dict(
+                    part="contentDetails",
+                    playlistId=uploads_playlist,
+                    maxResults=50,
+                )
+                if page_token:
+                    kwargs["pageToken"] = page_token
+                resp = yt_service.playlistItems().list(**kwargs).execute()
+            except Exception as e:
+                print(f"[analytics] playlist pagination failed (non-fatal): {e}")
+                break
+            for item in resp.get("items", []):
+                vid_id = item["contentDetails"]["videoId"]
+                if vid_id not in known_ids:
+                    new_ids.append(vid_id)
+            page_token = resp.get("nextPageToken")
+            if not page_token:
+                break
+
+        if not new_ids:
+            return 0
+
+        discovered = 0
+        for i in range(0, len(new_ids), 50):
+            batch = new_ids[i : i + 50]
+            try:
+                meta_resp = yt_service.videos().list(
+                    part="snippet,contentDetails",
+                    id=",".join(batch),
+                ).execute()
+            except Exception as e:
+                print(f"[analytics] metadata fetch for discovered videos failed (non-fatal): {e}")
+                continue
+            rows = []
+            for item in meta_resp.get("items", []):
+                dur = _parse_iso_duration(item["contentDetails"]["duration"])
+                rows.append({
+                    "niche_id": niche_id,
+                    "script_id": None,
+                    "youtube_video_id": item["id"],
+                    "video_type": "short" if dur <= 60 else "long",
+                    "title": item["snippet"]["title"],
+                    "duration_sec": dur,
+                    "status": "live",
+                })
+            if rows:
+                try:
+                    execute_with_retry(self._sb.table("published_videos").insert(rows))
+                    for r in rows:
+                        print(f"[analytics] discovered {r['video_type']}: {r['title'][:70]}")
+                    discovered += len(rows)
+                except Exception as e:
+                    print(f"[analytics] insert discovered videos failed (non-fatal): {e}")
+
+        return discovered
+
     def _aggregate(self, video_metrics: dict[str, dict]) -> tuple[int, float, float, float, int]:
         """Aggregate metrics across a set of videos.
 
@@ -554,7 +631,12 @@ class AnalyticsPoller:
                 self._backfill_published_video_metadata(yt_service, niche["id"], published_rows)
                 # Sync live/removed/private status against YouTube
                 self._sync_published_videos(yt_service, niche["id"], published_rows)
-                # Re-fetch so poll_niche sees updated status (avoids counting removed videos)
+                # Discover videos on the channel not yet in published_videos
+                known_ids = {r["youtube_video_id"] for r in published_rows}
+                found = self._discover_channel_videos(yt_service, niche["id"], known_ids)
+                if found:
+                    print(f"[analytics] added {found} discovered video(s) for niche {niche['name']}")
+                # Re-fetch so poll_niche sees full up-to-date set
                 published_rows = self._fetch_published_videos(niche["id"])
 
                 perf = self.poll_niche(niche["id"], channel_id, analytics, yt_service, [])

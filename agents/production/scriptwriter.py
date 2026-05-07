@@ -26,6 +26,25 @@ CRITICAL: Output ONLY the spoken narration — no title, no section headers, no 
 no stage directions, no camera notes, no brackets or production metadata of any kind.
 Your response begins with the first spoken word of the narration and ends with the last."""
 
+LONG_FORM_PROMPT_NO_BODY = """You are writing a script for a faceless YouTube video in the {category} niche.
+
+Topic: {title}
+
+No source article is available. Write an informative, well-researched video script (~1,800 words, ~12 minutes)
+that a general audience would find genuinely useful. Use your knowledge to provide accurate context, real-world
+examples, and actionable takeaways on this topic.
+
+Structure:
+- Hook (30 seconds): open with a striking fact, question, or scenario that makes the viewer lean in
+- Context (2 min): why this topic matters right now and who it affects
+- Deep dive (6 min): the key facts, mechanisms, or events — explain clearly with concrete examples
+- Lesson (2 min): what the viewer should know or do based on this topic
+- CTA (30 sec): "If this affects you..." + subscribe line
+
+CRITICAL: Output ONLY the spoken narration — no title, no section headers, no timestamps,
+no stage directions, no camera notes, no brackets or production metadata of any kind.
+Your response begins with the first spoken word of the narration and ends with the last."""
+
 SHORT_FORM_PROMPT = """You are writing a YouTube Short script (60 seconds, ~200 words) based on this longer script.
 
 The Short should:
@@ -134,14 +153,19 @@ class Scriptwriter:
     ) -> ScriptPair:
         _broll = re.compile(r'\[B-ROLL:.*?\]\n?', re.IGNORECASE | re.DOTALL)
 
-        long_form = _broll.sub('', complete_sonnet(
-            LONG_FORM_PROMPT.format(
+        if topic_body.strip():
+            long_form_prompt = LONG_FORM_PROMPT.format(
                 title=topic_title,
                 body=topic_body[:3000],
                 category=niche_category,
-            ),
-            max_tokens=3000,
-        )).strip()
+            )
+        else:
+            long_form_prompt = LONG_FORM_PROMPT_NO_BODY.format(
+                title=topic_title,
+                category=niche_category,
+            )
+
+        long_form = _broll.sub('', complete_sonnet(long_form_prompt, max_tokens=3000)).strip()
         short_form = _broll.sub('', complete(
             SHORT_FORM_PROMPT.format(long_form=long_form[:2000]),
             model="claude-haiku-4-5-20251001",

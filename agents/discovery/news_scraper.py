@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from supabase import Client
 from agents.shared.gate_client import GateClient, GateNumber
 from agents.shared.db_retry import execute_with_retry, patch_postgrest_http1
+from agents.shared.article_fetcher import fetch_article_body
 
 
 class NewsItem(BaseModel):
@@ -152,6 +153,8 @@ class NewsScraper:
                             if claude_score < 6:
                                 print(f"[news] skipped (score {claude_score}): {item.title[:60]}")
                                 continue
+                            body = fetch_article_body(item.url)
+                            print(f"[news] fetched body ({len(body)} chars): {item.title[:50]}")
                             result = execute_with_retry(
                                 self._sb.table("topics").insert({
                                     "niche_id": niche["id"],
@@ -159,7 +162,7 @@ class NewsScraper:
                                     "source_id": item.source_id,
                                     "title": item.title,
                                     "url": item.url,
-                                    "body": "",
+                                    "body": body,
                                     "upvotes": 0,
                                     "claude_score": claude_score,
                                     "status": "pending",

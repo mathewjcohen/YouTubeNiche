@@ -5,6 +5,7 @@ pytrends>=4.9.2
 requests>=2.31.0
 praw>=7.7.0
 feedparser>=6.0.0
+beautifulsoup4>=4.12.0
 openai>=1.30.0
 pydub>=0.25.1
 moviepy>=1.0.3,<2.0

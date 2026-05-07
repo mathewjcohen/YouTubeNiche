@@ -232,18 +232,21 @@ class YouTubeUploader:
         ).data
         return rows[0]["youtube_video_id"] if rows else None
 
-    def process_approved_videos(self, niche_id: str) -> None:
+    def process_approved_videos(self, niche_id: str, video_type_filter: Optional[str] = None) -> None:
         if not self._build_service_for_niche(niche_id):
             print(f"[uploader] niche {niche_id} has no linked YouTube channel — skipping upload")
             return
 
-        videos = execute_with_retry(
+        query = (
             self._sb.table("videos")
             .select("*, scripts(youtube_title, youtube_description, youtube_tags)")
             .eq("niche_id", niche_id)
             .eq("gate6_state", "approved")
             .eq("status", "approved")
-        ).data
+        )
+        if video_type_filter:
+            query = query.eq("video_type", video_type_filter)
+        videos = execute_with_retry(query).data
 
         # Upload long+short as a pair per script: long first so the link is available for the short
         videos.sort(key=lambda v: (v["script_id"], 0 if v["video_type"] == "long" else 1))

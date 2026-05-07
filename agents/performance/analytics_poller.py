@@ -149,21 +149,20 @@ class AnalyticsPoller:
         start_date: str,
         end_date: str,
     ) -> tuple[int, int]:
-        """Channel-level impressions and subscribers gained.
+        """Channel-level subscribers gained. Returns (impressions=0, subscribers_gained).
 
-        impressions are only available without a video filter (channel-wide).
-        Returns (impressions, subscribers_gained).
+        impressions requires content-owner credentials; not available with yt-analytics scope.
         """
         try:
             result = analytics_service.reports().query(
                 ids="channel==MINE",
                 startDate=start_date,
                 endDate=end_date,
-                metrics="impressions,subscribersGained",
+                metrics="subscribersGained",
             ).execute()
             rows = result.get("rows", [])
             if rows:
-                return int(rows[0][0]), int(rows[0][1])
+                return 0, int(rows[0][0])
         except Exception as e:
             print(f"[analytics] channel-level metrics query failed (non-fatal): {e}")
         return 0, 0

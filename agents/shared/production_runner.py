@@ -29,7 +29,10 @@ class ProductionRunner:
         ).data
         print(f"[production] {len(niches)} active niche(s)")
         for niche in niches:
-            self._process_niche(niche)
+            try:
+                self._process_niche(niche)
+            except Exception as exc:
+                print(f"[production] niche '{niche.get('name', niche.get('id'))}' failed: {exc}")
 
     def _process_niche(self, niche: dict) -> None:
         niche_id = niche["id"]

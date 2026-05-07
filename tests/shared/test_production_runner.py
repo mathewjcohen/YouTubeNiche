@@ -79,6 +79,29 @@ def test_process_niche_skips_upload_when_channel_not_linked(runner):
     mock_up.process_approved_videos.assert_not_called()
 
 
+def test_run_continues_after_niche_failure(runner):
+    """If one niche fails, the runner continues to process remaining niches."""
+    niches = [
+        {"id": "n1", "name": "legal", "channel_state": "linked", "status": "promoted"},
+        {"id": "n2", "name": "tax", "channel_state": "linked", "status": "testing"},
+    ]
+    call_count = 0
+
+    def fail_first(niche):
+        nonlocal call_count
+        call_count += 1
+        if niche["id"] == "n1":
+            raise RuntimeError("transient error")
+
+    with patch("agents.shared.production_runner.get_app_setting", return_value="true"), \
+         patch("agents.shared.production_runner.execute_with_retry") as mock_retry, \
+         patch.object(runner, "_process_niche", side_effect=fail_first):
+        mock_retry.return_value.data = niches
+        runner.run()
+
+    assert call_count == 2
+
+
 def test_voiceover_called_with_limit_1(runner):
     """Voiceover must be called with limit=1 to prevent exceeding YouTube quota."""
     niche = {"id": "niche-1", "name": "legal", "channel_state": "linked", "status": "promoted"}

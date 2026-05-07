@@ -2,7 +2,7 @@ name: Pipeline Runner
 
 on:
   schedule:
-    - cron: "0 * * * *"        # script runner — every hour
+    - cron: "0 6 * * *"         # script runner — once daily at 06:00 UTC
     - cron: "0 0,8,16 * * *"   # production runner — 3× daily
   workflow_dispatch:
     inputs:
@@ -22,7 +22,7 @@ env:
 jobs:
   script:
     name: Script writer (topics → scripts)
-    if: ${{ github.event.schedule == '0 * * * *' || (github.event_name == 'workflow_dispatch' && (inputs.job == 'script' || inputs.job == 'both')) }}
+    if: ${{ github.event.schedule == '0 6 * * *' || (github.event_name == 'workflow_dispatch' && (inputs.job == 'script' || inputs.job == 'both')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

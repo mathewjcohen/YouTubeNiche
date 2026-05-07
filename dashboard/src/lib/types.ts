@@ -213,6 +213,21 @@ export interface Insight {
   summary_text: string
 }
 
+export type PublishedVideoStatus = 'live' | 'removed' | 'private'
+
+export interface PublishedVideo {
+  id: string
+  niche_id: string
+  script_id: string
+  youtube_video_id: string
+  video_type: 'long' | 'short'
+  title: string | null
+  duration_sec: number | null
+  status: PublishedVideoStatus
+  removed_at: string | null
+  uploaded_at: string
+}
+
 export interface ScoreHistoryRow {
   niche_name: string
   final_score: number

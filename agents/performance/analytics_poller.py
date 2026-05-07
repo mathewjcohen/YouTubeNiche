@@ -105,7 +105,7 @@ class AnalyticsPoller:
         """Returns full published_video rows for a niche."""
         return execute_with_retry(
             self._sb.table("published_videos")
-            .select("youtube_video_id, video_type, title, duration_sec")
+            .select("youtube_video_id, video_type, title, duration_sec, status")
             .eq("niche_id", niche_id)
         ).data
 
@@ -350,6 +350,63 @@ class AnalyticsPoller:
             )
         print(f"[analytics] backfilled metadata for {len(metadata)} video(s) in niche {niche_id}")
 
+    def _sync_published_videos(
+        self,
+        yt_service,
+        niche_id: str,
+        published_rows: list[dict],
+    ) -> None:
+        """Sync published_videos.status against YouTube — marks removed/private/live."""
+        all_ids = [r["youtube_video_id"] for r in published_rows]
+        if not all_ids:
+            return
+        try:
+            result = yt_service.videos().list(
+                part="status",
+                id=",".join(all_ids),
+            ).execute()
+        except Exception as e:
+            print(f"[analytics] sync check failed for niche {niche_id} (non-fatal): {e}")
+            return
+
+        returned: dict[str, str] = {}
+        for item in result.get("items", []):
+            privacy = item.get("status", {}).get("privacyStatus", "public")
+            returned[item["id"]] = privacy
+
+        now = datetime.now(timezone.utc).isoformat()
+        changed = 0
+        for row in published_rows:
+            vid_id = row["youtube_video_id"]
+            current = row.get("status", "live")
+            if vid_id not in returned:
+                if current != "removed":
+                    execute_with_retry(
+                        self._sb.table("published_videos")
+                        .update({"status": "removed", "removed_at": now})
+                        .eq("youtube_video_id", vid_id)
+                        .eq("niche_id", niche_id)
+                    )
+                    print(f"[analytics] marked removed: {vid_id}")
+                    changed += 1
+            else:
+                new_status = "private" if returned[vid_id] in ("private", "unlisted") else "live"
+                if current != new_status:
+                    update: dict = {"status": new_status}
+                    if new_status == "live":
+                        update["removed_at"] = None
+                    execute_with_retry(
+                        self._sb.table("published_videos")
+                        .update(update)
+                        .eq("youtube_video_id", vid_id)
+                        .eq("niche_id", niche_id)
+                    )
+                    print(f"[analytics] status {current} -> {new_status}: {vid_id}")
+                    changed += 1
+
+        if changed:
+            print(f"[analytics] synced {changed} status change(s) for niche {niche_id}")
+
     def _aggregate(self, video_metrics: dict[str, dict]) -> tuple[int, float, float, float, int]:
         """Aggregate metrics across a set of videos.
 
@@ -495,6 +552,10 @@ class AnalyticsPoller:
 
                 # Backfill title + duration for any new uploads
                 self._backfill_published_video_metadata(yt_service, niche["id"], published_rows)
+                # Sync live/removed/private status against YouTube
+                self._sync_published_videos(yt_service, niche["id"], published_rows)
+                # Re-fetch so poll_niche sees updated status (avoids counting removed videos)
+                published_rows = self._fetch_published_videos(niche["id"])
 
                 perf = self.poll_niche(niche["id"], channel_id, analytics, yt_service, [])
                 if not perf:

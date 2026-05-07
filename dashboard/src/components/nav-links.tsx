@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { href: '/scripts', label: 'Script Review', gateKey: 'gate3' as keyof PendingCounts },
   { href: '/media', label: 'Media Review', gateKey: null },
   { href: '/analytics', label: 'Analytics' },
+  { href: '/videos', label: 'Videos' },
   { href: '/settings', label: 'Settings' },
 ]
 

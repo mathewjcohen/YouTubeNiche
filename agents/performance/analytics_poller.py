@@ -311,24 +311,25 @@ class AnalyticsPoller:
         yt_service,
         video_ids: list[str],
     ) -> dict[str, dict]:
-        """Fetch title and duration from YouTube Data API for a batch of video IDs."""
+        """Fetch title and duration from YouTube Data API. Chunks to 50 IDs per request."""
         if not video_ids:
             return {}
-        try:
-            result = yt_service.videos().list(
-                part="contentDetails,snippet",
-                id=",".join(video_ids),
-            ).execute()
-            out = {}
-            for item in result.get("items", []):
-                out[item["id"]] = {
-                    "title": item["snippet"]["title"],
-                    "duration_sec": _parse_iso_duration(item["contentDetails"]["duration"]),
-                }
-            return out
-        except Exception as e:
-            print(f"[analytics] video metadata fetch failed (non-fatal): {e}")
-            return {}
+        out: dict[str, dict] = {}
+        for i in range(0, len(video_ids), 50):
+            batch = video_ids[i:i + 50]
+            try:
+                result = yt_service.videos().list(
+                    part="contentDetails,snippet",
+                    id=",".join(batch),
+                ).execute()
+                for item in result.get("items", []):
+                    out[item["id"]] = {
+                        "title": item["snippet"]["title"],
+                        "duration_sec": _parse_iso_duration(item["contentDetails"]["duration"]),
+                    }
+            except Exception as e:
+                print(f"[analytics] video metadata fetch failed (non-fatal): {e}")
+        return out
 
     def _backfill_published_video_metadata(
         self,
@@ -360,19 +361,21 @@ class AnalyticsPoller:
         all_ids = [r["youtube_video_id"] for r in published_rows]
         if not all_ids:
             return
-        try:
-            result = yt_service.videos().list(
-                part="status",
-                id=",".join(all_ids),
-            ).execute()
-        except Exception as e:
-            print(f"[analytics] sync check failed for niche {niche_id} (non-fatal): {e}")
-            return
 
         returned: dict[str, str] = {}
-        for item in result.get("items", []):
-            privacy = item.get("status", {}).get("privacyStatus", "public")
-            returned[item["id"]] = privacy
+        for i in range(0, len(all_ids), 50):
+            batch = all_ids[i:i + 50]
+            try:
+                result = yt_service.videos().list(
+                    part="status",
+                    id=",".join(batch),
+                ).execute()
+                for item in result.get("items", []):
+                    privacy = item.get("status", {}).get("privacyStatus", "public")
+                    returned[item["id"]] = privacy
+            except Exception as e:
+                print(f"[analytics] sync check failed for niche {niche_id} (non-fatal): {e}")
+                return
 
         now = datetime.now(timezone.utc).isoformat()
         changed = 0
@@ -633,7 +636,7 @@ class AnalyticsPoller:
         else:
             niche_ids = [n["id"] for n in niche_infos]
             script_rows = execute_with_retry(
-                self._sb.table("scripts").select("id, niche_id, title").in_("niche_id", niche_ids)
+                self._sb.table("scripts").select("id, niche_id, youtube_title").in_("niche_id", niche_ids)
             ).data
             niche_name_map = {n["id"]: n["name"] for n in niche_infos}
             for vid_id, meta in metadata.items():
@@ -641,7 +644,7 @@ class AnalyticsPoller:
                 best_script = None
                 best_score = 0.0
                 for s in script_rows:
-                    s_words = set((s.get("title") or "").lower().split())
+                    s_words = set((s.get("youtube_title") or "").lower().split())
                     if not vid_words or not s_words:
                         continue
                     score = len(vid_words & s_words) / max(len(vid_words), len(s_words))

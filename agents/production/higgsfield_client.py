@@ -9,6 +9,8 @@ _MAX_POLLS = 24  # 2 minutes max
 
 class HiggsfileClient:
     def __init__(self, api_key: str) -> None:
+        if not api_key or not api_key.strip():
+            raise ValueError("HIGGSFIELD_API_KEY cannot be empty")
         self._headers = {"Authorization": f"Bearer {api_key}"}
 
     def generate_image(self, prompt: str, aspect_ratio: str) -> Image.Image:

@@ -13,8 +13,14 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from supabase import Client
 
+from googleapiclient.errors import HttpError
+
 from agents.shared.gate_client import GateClient
 from agents.shared.db_retry import execute_with_retry
+
+
+def _is_quota_exceeded(exc: Exception) -> bool:
+    return isinstance(exc, HttpError) and exc.resp.status == 403 and "quotaExceeded" in str(exc)
 
 SCOPES = [
     "https://www.googleapis.com/auth/youtube",
@@ -329,3 +335,5 @@ class YouTubeUploader:
                 except Exception:
                     pass
                 print(f"[uploader] failed for video {video['id']}: {e}")
+                if _is_quota_exceeded(e):
+                    raise

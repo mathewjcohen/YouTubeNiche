@@ -9,7 +9,7 @@ from supabase import Client, create_client
 from agents.shared.gate_client import GateClient
 from agents.shared.config_loader import get_env
 from agents.shared.db_retry import execute_with_retry, patch_postgrest_http1
-from agents.production.uploader import YouTubeUploader
+from agents.production.uploader import YouTubeUploader, _is_quota_exceeded
 
 
 def main() -> None:
@@ -48,6 +48,9 @@ def main() -> None:
             uploader.process_approved_videos(niche_id, video_type_filter="short")
         except Exception as exc:
             print(f"[shorts_cleanup]   '{name}' failed: {exc}")
+            if _is_quota_exceeded(exc):
+                print("[shorts_cleanup] YouTube quota exhausted — stopping")
+                break
 
     print("[shorts_cleanup] done")
 

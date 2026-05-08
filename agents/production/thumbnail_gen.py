@@ -205,8 +205,7 @@ class ThumbnailGenerator:
         line_h = 115 if is_short else 105
         font_large = _load_font(_BOLD_CANDIDATES, font_size)
 
-        # 2. Wrap and draw title — centered horizontally, 12% side padding
-        pad_x = int(w * 0.12)
+        # 2. Wrap and draw title — centered horizontally
         wrapped = textwrap.wrap(title, width=wrap_width)
         total_h = len(wrapped) * line_h
         # Shorts: center text vertically in bottom third; long: anchor near bottom

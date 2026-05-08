@@ -7,6 +7,8 @@ from PIL import Image
 _BASE_URL = "https://api.higgsfield.ai"
 _POLL_INTERVAL = 5
 _MAX_POLLS = 24  # 2 minutes max
+_PRIMARY_MODEL = "nano_banana_2"
+_FALLBACK_MODEL = "seedream_v5_lite"
 
 class HiggsfileClient:
     def __init__(self, api_key: str) -> None:
@@ -18,15 +20,20 @@ class HiggsfileClient:
         self._headers = {"Authorization": f"Basic {token}"}
 
     def generate_image(self, prompt: str, aspect_ratio: str) -> Image.Image:
-        job_id = self._submit(prompt, aspect_ratio)
-        raw_url = self._poll(job_id)
+        try:
+            job_id = self._submit(prompt, aspect_ratio, _PRIMARY_MODEL)
+            raw_url = self._poll(job_id)
+        except Exception as primary_err:
+            print(f"[higgsfield] {_PRIMARY_MODEL} failed ({primary_err}), falling back to {_FALLBACK_MODEL}")
+            job_id = self._submit(prompt, aspect_ratio, _FALLBACK_MODEL)
+            raw_url = self._poll(job_id)
         return self._download(raw_url)
 
-    def _submit(self, prompt: str, aspect_ratio: str) -> str:
+    def _submit(self, prompt: str, aspect_ratio: str, model: str) -> str:
         resp = requests.post(
             f"{_BASE_URL}/v1/generations",
             headers=self._headers,
-            json={"model": "nano_banana_2", "prompt": prompt, "aspect_ratio": aspect_ratio},
+            json={"model": model, "prompt": prompt, "aspect_ratio": aspect_ratio},
             timeout=30,
         )
         resp.raise_for_status()

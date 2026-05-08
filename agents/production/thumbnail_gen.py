@@ -10,6 +10,7 @@ from supabase import Client
 
 from agents.shared.gate_client import GateClient, GateNumber
 from agents.shared.config_loader import get_env
+from agents.production.higgsfield_client import HiggsfileClient
 
 THUMB_W, THUMB_H = 1280, 720          # long-form 16:9
 SHORT_W, SHORT_H = 1080, 1920         # shorts 9:16
@@ -49,6 +50,17 @@ CATEGORY_SEARCH_FALLBACK: dict[str, str] = {
     "career":           "business office professional",
     "ai_tech":          "technology computer",
     "health":           "hospital medical",
+}
+
+_CATEGORY_STYLE: dict[str, str] = {
+    "legal": "courtroom and law books background, gold accents",
+    "insurance": "professional office with documents background, green accents",
+    "tax": "tax forms and IRS documents background, red and orange warning accents",
+    "personal_finance": "financial charts and money background, blue accents",
+    "real_estate": "house exterior and property listing background, orange accents",
+    "career": "professional office and business meeting background, purple accents",
+    "ai_tech": "futuristic technology and glowing circuits background, cyan accents",
+    "health": "medical setting and doctor background, teal accents",
 }
 
 
@@ -114,6 +126,16 @@ def _apply_gradient(img: Image.Image) -> Image.Image:
     return Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
 
 
+def _build_higgsfield_prompt(title: str, category: str, is_short: bool) -> str:
+    style = _CATEGORY_STYLE.get(category, "dramatic background, bright accents")
+    orientation = "vertical 9:16" if is_short else "horizontal 16:9"
+    return (
+        f"YouTube thumbnail, {orientation}, bold white text reading '{title}', "
+        f"shocked or alarmed person reacting, {style}, "
+        f"cinematic dramatic lighting, high contrast, scroll-stopping, photorealistic"
+    )
+
+
 class ThumbnailGenerator:
     def __init__(
         self,
@@ -121,12 +143,14 @@ class ThumbnailGenerator:
         gate_client: Optional[GateClient] = None,
         output_dir: str = "output/thumbnails",
         pexels_api_key: Optional[str] = None,
+        higgsfield_api_key: Optional[str] = None,
     ):
         self._sb = supabase
         self._gate = gate_client
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
         self._pexels_key = pexels_api_key
+        self._higgsfield = HiggsfileClient(higgsfield_api_key) if higgsfield_api_key else None
 
     def render(
         self,
@@ -139,7 +163,20 @@ class ThumbnailGenerator:
         is_short = video_type == "short"
         w, h = (SHORT_W, SHORT_H) if is_short else (THUMB_W, THUMB_H)
 
-        # 1. Background photo (caller may pass a pre-fetched image to avoid double-fetch)
+        # 1. Try Higgsfield AI for the background
+        if self._higgsfield:
+            try:
+                prompt = _build_higgsfield_prompt(title, category, is_short)
+                aspect_ratio = "9:16" if is_short else "16:9"
+                img = self._higgsfield.generate_image(prompt, aspect_ratio)
+                img = _fit_crop(img, w, h)
+                out_path = self._output_dir / f"{output_stem}.jpg"
+                img.save(str(out_path), "JPEG", quality=92)
+                return out_path
+            except Exception as exc:
+                print(f"[thumbnail] Higgsfield failed, falling back to Pillow: {type(exc).__name__}: {exc}")
+
+        # 2. Background photo via Pexels (fallback when Higgsfield is unavailable or fails)
         if bg is None and self._pexels_key:
             for query in (title, CATEGORY_SEARCH_FALLBACK.get(category, category)):
                 try:
@@ -214,7 +251,7 @@ class ThumbnailGenerator:
             category = script["niches"]["category"]
             # Fetch Pexels photo once per script; reuse for both long and short
             shared_bg: Optional[Image.Image] = None
-            if self._pexels_key:
+            if self._pexels_key and not self._higgsfield:
                 for query in (script["youtube_title"], CATEGORY_SEARCH_FALLBACK.get(category, category)):
                     try:
                         shared_bg = _pexels_photo(query, self._pexels_key)

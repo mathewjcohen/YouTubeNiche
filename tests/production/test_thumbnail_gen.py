@@ -23,3 +23,70 @@ def test_title_wraps_long_text(tmp_path):
         output_stem="long_title_test",
     )
     assert out.exists()
+
+
+def test_render_uses_higgsfield_when_configured(tmp_path):
+    """When HiggsfileClient is configured, render() returns a file without touching Pexels."""
+    from unittest.mock import MagicMock, patch
+    from PIL import Image
+
+    fake_img = Image.new("RGB", (1280, 720), (100, 100, 200))
+    mock_client = MagicMock()
+    mock_client.generate_image.return_value = fake_img
+
+    gen = ThumbnailGenerator(output_dir=str(tmp_path))
+    gen._higgsfield = mock_client
+
+    out = gen.render("Tax Secrets Exposed", "tax", "test_higgsfield_long", video_type="long")
+
+    assert out.exists()
+    mock_client.generate_image.assert_called_once()
+    call_args = mock_client.generate_image.call_args
+    assert call_args.kwargs.get("aspect_ratio") == "16:9" or call_args.args[1] == "16:9"
+
+
+def test_render_higgsfield_short_uses_9_16(tmp_path):
+    """Shorts pass aspect_ratio='9:16' to Higgsfield."""
+    from unittest.mock import MagicMock
+    from PIL import Image
+
+    fake_img = Image.new("RGB", (1080, 1920), (100, 100, 200))
+    mock_client = MagicMock()
+    mock_client.generate_image.return_value = fake_img
+
+    gen = ThumbnailGenerator(output_dir=str(tmp_path))
+    gen._higgsfield = mock_client
+
+    gen.render("Tax Secrets Exposed", "tax", "test_higgsfield_short", video_type="short")
+
+    call_args = mock_client.generate_image.call_args
+    assert call_args.kwargs.get("aspect_ratio") == "9:16" or call_args.args[1] == "9:16"
+
+
+def test_render_falls_back_to_pillow_when_higgsfield_fails(tmp_path):
+    """If Higgsfield raises, render() falls back to the Pillow solid-color path."""
+    from unittest.mock import MagicMock
+
+    mock_client = MagicMock()
+    mock_client.generate_image.side_effect = RuntimeError("API error")
+
+    gen = ThumbnailGenerator(output_dir=str(tmp_path))
+    gen._higgsfield = mock_client
+
+    # No pexels key → Pillow solid-color fallback
+    out = gen.render("Tax Secrets Exposed", "tax", "test_fallback", video_type="long")
+
+    assert out.exists()
+
+
+def test_build_higgsfield_prompt_includes_title_and_orientation():
+    """_build_higgsfield_prompt embeds the title and correct orientation."""
+    from agents.production.thumbnail_gen import _build_higgsfield_prompt
+
+    long_prompt = _build_higgsfield_prompt("Tax Secrets", "tax", is_short=False)
+    short_prompt = _build_higgsfield_prompt("Tax Secrets", "tax", is_short=True)
+
+    assert "Tax Secrets" in long_prompt
+    assert "16:9" in long_prompt
+    assert "Tax Secrets" in short_prompt
+    assert "9:16" in short_prompt

@@ -1,4 +1,5 @@
 import pytest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 from agents.production.uploader import YouTubeUploader
 
@@ -12,38 +13,79 @@ def uploader():
         return YouTubeUploader(supabase=mock_sb, gate_client=mock_gate)
 
 
+def _make_mock_yt(video_id: str = "yt-video-id-abc") -> MagicMock:
+    mock_yt = MagicMock()
+    mock_yt.videos.return_value.insert.return_value.next_chunk.return_value = (
+        None, {"id": video_id}
+    )
+    return mock_yt
+
+
 def test_upload_video_calls_youtube_api(uploader, tmp_path):
     video_path = tmp_path / "test.mp4"
     video_path.write_bytes(b"fake video data")
     thumb_path = tmp_path / "test.jpg"
     thumb_path.write_bytes(b"fake thumb data")
 
-    mock_yt = uploader._yt
-    mock_yt.videos.return_value.insert.return_value.next_chunk.return_value = (
-        None, {"id": "yt-video-id-abc"}
-    )
+    uploader._yt = _make_mock_yt("yt-video-id-abc")
 
-    video_id = uploader.upload(
-        video_path=str(video_path),
-        thumbnail_path=str(thumb_path),
-        title="Test Video Title",
-        description="Test description",
-        tags=["test", "legal"],
-        is_short=False,
-    )
+    with patch.object(uploader, "_fetch_to_tempfile", side_effect=lambda url, suffix: Path(url)):
+        video_id = uploader.upload(
+            video_path=str(video_path),
+            thumbnail_path=str(thumb_path),
+            title="Test Video Title",
+            description="Test description",
+            tags=["test", "legal"],
+            is_short=False,
+        )
     assert video_id == "yt-video-id-abc"
 
 
 def test_upload_raises_on_missing_file(uploader):
-    with pytest.raises(FileNotFoundError):
-        uploader.upload(
-            video_path="/nonexistent/path.mp4",
-            thumbnail_path="/nonexistent/thumb.jpg",
-            title="Title",
-            description="Desc",
-            tags=[],
-            is_short=False,
-        )
+    uploader._yt = _make_mock_yt()
+
+    def _fetch_raising(url, suffix):
+        p = Path(url)
+        if not p.exists():
+            raise FileNotFoundError(f"No such file: {url}")
+        return p
+
+    with patch.object(uploader, "_fetch_to_tempfile", side_effect=_fetch_raising):
+        with pytest.raises(FileNotFoundError):
+            uploader.upload(
+                video_path="/nonexistent/path.mp4",
+                thumbnail_path="/nonexistent/thumb.jpg",
+                title="Title",
+                description="Desc",
+                tags=[],
+                is_short=False,
+            )
+
+
+def test_upload_takes_video_down_on_thumbnail_failure(uploader, tmp_path):
+    """When thumbnails().set() raises, the uploaded video is deleted and exception re-raised."""
+    video_path = tmp_path / "test.mp4"
+    video_path.write_bytes(b"fake video data")
+    thumb_path = tmp_path / "test.jpg"
+    thumb_path.write_bytes(b"fake thumb data")
+
+    mock_yt = _make_mock_yt("yt-video-id-abc")
+    mock_yt.thumbnails.return_value.set.return_value.execute.side_effect = RuntimeError("quota exceeded")
+    uploader._yt = mock_yt
+
+    with patch.object(uploader, "_fetch_to_tempfile", side_effect=lambda url, suffix: Path(url)):
+        with pytest.raises(RuntimeError, match="quota exceeded"):
+            uploader.upload(
+                video_path=str(video_path),
+                thumbnail_path=str(thumb_path),
+                title="Title",
+                description="Desc",
+                tags=[],
+                is_short=False,
+            )
+
+    mock_yt.videos.return_value.delete.assert_called_once_with(id="yt-video-id-abc")
+    mock_yt.videos.return_value.delete.return_value.execute.assert_called_once()
 
 
 BASE_URL = "https://project.supabase.co/storage/v1/object/public"
@@ -155,8 +197,6 @@ def test_process_approved_videos_inserts_published_and_deletes_row(uploader):
         },
     }
 
-    # Mock DB calls
-    uploader._sb.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value.data = [video]
     uploader._build_service_for_niche = MagicMock(return_value=True)
 
     with patch("agents.production.uploader.execute_with_retry") as mock_exec:
@@ -165,8 +205,14 @@ def test_process_approved_videos_inserts_published_and_deletes_row(uploader):
         def track_exec(q):
             calls.append(q)
             result = MagicMock()
-            # Return video data on first call (the fetch), empty on subsequent calls
-            result.data = [video] if len(calls) == 1 else []
+            if len(calls) == 1:
+                # Fetch approved videos
+                result.data = [video]
+            elif len(calls) == 2:
+                # Atomic claim: update status=uploading
+                result.data = [{"id": video_id}]
+            else:
+                result.data = []
             return result
 
         mock_exec.side_effect = track_exec
@@ -176,5 +222,5 @@ def test_process_approved_videos_inserts_published_and_deletes_row(uploader):
                 with patch.object(uploader, "_delete_supabase_assets"):
                     uploader.process_approved_videos(niche_id)
 
-    # Should have called execute_with_retry for: fetch videos, update status, insert published_videos, delete videos row
+    # fetch, claim, update uploaded, insert published, delete row, check remaining, mark done
     assert mock_exec.call_count >= 4

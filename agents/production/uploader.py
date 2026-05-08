@@ -92,8 +92,7 @@ class YouTubeUploader:
         description: str,
         tags: List[str],
         is_short: bool = False,
-    ) -> tuple:
-        """Return (youtube_video_id, thumbnail_set_ok)."""
+    ) -> str:
         local_video = self._fetch_to_tempfile(video_path, ".mp4")
         local_thumb = self._fetch_to_tempfile(thumbnail_path, ".jpg") if thumbnail_path else None
 
@@ -119,26 +118,24 @@ class YouTubeUploader:
 
         video_id = response["id"]
 
-        thumb_ok = False
         if local_thumb:
             try:
                 thumb_media = MediaFileUpload(str(local_thumb), mimetype="image/jpeg")
                 self._yt.thumbnails().set(videoId=video_id, media_body=thumb_media).execute()
-                thumb_ok = True
-            except Exception as thumb_err:
-                print(f"[uploader] thumbnail set skipped for {video_id}: {thumb_err}")
+            except Exception:
+                local_video.unlink(missing_ok=True)
+                local_thumb.unlink(missing_ok=True)
+                print(f"[uploader] thumbnail failed for {video_id} — taking video down for retry next cycle")
+                self._yt.videos().delete(id=video_id).execute()
+                raise
 
         local_video.unlink(missing_ok=True)
         if local_thumb:
             local_thumb.unlink(missing_ok=True)
 
-        return video_id, thumb_ok
+        return video_id
 
-    def _delete_supabase_assets(self, video: dict, keep_thumbnail: bool = False) -> None:
-        """Delete voiceover, SRT, thumbnail, and b-roll from Supabase Storage.
-
-        keep_thumbnail=True preserves the thumbnail so a retry runner can use it later.
-        """
+    def _delete_supabase_assets(self, video: dict) -> None:
 
         def _remove(bucket: str, keys: List[str]) -> None:
             if not keys:
@@ -169,9 +166,7 @@ class YouTubeUploader:
                     _remove("voiceovers", [key])
 
         thumb_url = video.get("thumbnail_path") or ""
-        if keep_thumbnail:
-            print(f"[uploader] thumbnail preserved for retry: {thumb_url}")
-        elif ".amazonaws.com/" in thumb_url:
+        if ".amazonaws.com/" in thumb_url:
             self._delete_s3_video(thumb_url)
         else:
             key = _key_from_url(thumb_url, "thumbnails")
@@ -298,7 +293,7 @@ class YouTubeUploader:
                         else:
                             description = description.rstrip() + f"\n\n{link_line}"
 
-                yt_id, thumb_ok = self.upload(
+                yt_id = self.upload(
                     video_path=video["video_path"],
                     thumbnail_path=video["thumbnail_path"],
                     title=script["youtube_title"],
@@ -313,17 +308,13 @@ class YouTubeUploader:
                 execute_with_retry(
                     self._sb.table("videos").update({"status": "uploaded"}).eq("id", video["id"])
                 )
-                published_row: Dict = {
-                    "niche_id": niche_id,
-                    "script_id": video["script_id"],
-                    "youtube_video_id": yt_id,
-                    "video_type": video["video_type"],
-                }
-                if not thumb_ok and video.get("thumbnail_path"):
-                    published_row["thumbnail_path"] = video["thumbnail_path"]
-                    print(f"[uploader] thumbnail_path stored for retry on {yt_id}")
                 execute_with_retry(
-                    self._sb.table("published_videos").insert(published_row)
+                    self._sb.table("published_videos").insert({
+                        "niche_id": niche_id,
+                        "script_id": video["script_id"],
+                        "youtube_video_id": yt_id,
+                        "video_type": video["video_type"],
+                    })
                 )
                 execute_with_retry(
                     self._sb.table("videos").delete().eq("id", video["id"])
@@ -337,7 +328,7 @@ class YouTubeUploader:
                     )
                     print(f"[uploader] script {video['script_id'][:8]} marked done")
                 self._delete_s3_video(video["video_path"])
-                self._delete_supabase_assets(video, keep_thumbnail=not thumb_ok)
+                self._delete_supabase_assets(video)
                 print(f"[uploader] uploaded {yt_id} ({video['video_type']})")
             except Exception as e:
                 try:

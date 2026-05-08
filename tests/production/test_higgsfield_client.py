@@ -31,6 +31,8 @@ def test_generate_image_returns_pil_image(mock_sleep, mock_post, mock_get):
 
     download_response = Mock()
     download_response.content = _mock_image_bytes()
+    download_response.__enter__ = Mock(return_value=download_response)
+    download_response.__exit__ = Mock(return_value=False)
 
     mock_get.side_effect = [poll_response, download_response]
 
@@ -62,6 +64,8 @@ def test_generate_image_short_aspect_ratio(mock_sleep, mock_post, mock_get):
 
     download_response = Mock()
     download_response.content = _mock_image_bytes()
+    download_response.__enter__ = Mock(return_value=download_response)
+    download_response.__exit__ = Mock(return_value=False)
 
     mock_get.side_effect = [poll_response, download_response]
 
@@ -140,6 +144,8 @@ def test_bearer_auth_header_sent(mock_sleep, mock_post, mock_get):
 
     download_response = Mock()
     download_response.content = _mock_image_bytes()
+    download_response.__enter__ = Mock(return_value=download_response)
+    download_response.__exit__ = Mock(return_value=False)
 
     mock_get.side_effect = [poll_response, download_response]
 

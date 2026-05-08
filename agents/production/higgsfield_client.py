@@ -36,13 +36,14 @@ class HiggsfileClient:
             )
             resp.raise_for_status()
             data = resp.json()["generation"]
-            if data["status"] == "completed":
+            status = data["status"]
+            if status == "completed":
                 return data["results"]["rawUrl"]
-            if data["status"] == "failed":
+            if status == "failed":
                 raise RuntimeError(f"Higgsfield job {job_id} failed")
         raise TimeoutError(f"Higgsfield job {job_id} timed out after {_MAX_POLLS * _POLL_INTERVAL}s")
 
     def _download(self, url: str) -> Image.Image:
-        resp = requests.get(url, timeout=30)
-        resp.raise_for_status()
-        return Image.open(io.BytesIO(resp.content)).convert("RGB")
+        with requests.get(url, timeout=30) as resp:
+            resp.raise_for_status()
+            return Image.open(io.BytesIO(resp.content)).convert("RGB")

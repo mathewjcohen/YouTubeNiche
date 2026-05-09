@@ -23,6 +23,13 @@ class HiggsfileClient:
         try:
             job_id = self._submit(prompt, aspect_ratio, _PRIMARY_MODEL)
             raw_url = self._poll(job_id)
+        except requests.HTTPError as primary_err:
+            resp = primary_err.response
+            if resp is not None and resp.status_code >= 500:
+                raise  # server-side outage; fallback model hits the same dead endpoint
+            print(f"[higgsfield] {_PRIMARY_MODEL} failed ({primary_err}), falling back to {_FALLBACK_MODEL}")
+            job_id = self._submit(prompt, aspect_ratio, _FALLBACK_MODEL)
+            raw_url = self._poll(job_id)
         except Exception as primary_err:
             print(f"[higgsfield] {_PRIMARY_MODEL} failed ({primary_err}), falling back to {_FALLBACK_MODEL}")
             job_id = self._submit(prompt, aspect_ratio, _FALLBACK_MODEL)

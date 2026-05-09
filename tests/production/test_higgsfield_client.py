@@ -1,5 +1,6 @@
 import io
 import pytest
+import requests
 from unittest.mock import Mock, patch, call
 from PIL import Image
 from agents.production.higgsfield_client import HiggsfileClient
@@ -113,6 +114,24 @@ def test_generate_image_falls_back_to_seedream_on_primary_failure(mock_sleep, mo
     assert mock_post.call_count == 2
     fallback_call_kwargs = mock_post.call_args_list[1][1]
     assert fallback_call_kwargs["json"]["model"] == "seedream_v5_lite"
+
+
+@patch("agents.production.higgsfield_client.requests.get")
+@patch("agents.production.higgsfield_client.requests.post")
+@patch("agents.production.higgsfield_client.time.sleep")
+def test_generate_image_skips_model_fallback_on_5xx(mock_sleep, mock_post, mock_get):
+    """On a 5xx HTTP error (e.g. 522 Cloudflare timeout), re-raises immediately without
+    attempting the fallback model — the server is down, not the model."""
+    fake_response = Mock()
+    fake_response.status_code = 522
+    http_err = requests.HTTPError(response=fake_response)
+    mock_post.return_value.raise_for_status.side_effect = http_err
+
+    client = HiggsfileClient(api_key="test-id:test-secret")
+    with pytest.raises(requests.HTTPError):
+        client.generate_image(prompt="test prompt", aspect_ratio="16:9")
+
+    assert mock_post.call_count == 1  # no fallback model attempted
 
 
 @patch("agents.production.higgsfield_client.requests.get")

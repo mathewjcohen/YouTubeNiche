@@ -38,7 +38,7 @@ def test_generate_image_returns_pil_image(mock_sleep, mock_post, mock_get):
     mock_get.side_effect = [poll_response, download_response]
 
     # Execute
-    client = HiggsfileClient(api_key="test-api-key")
+    client = HiggsfileClient(api_key="test-id:test-secret")
     result = client.generate_image(prompt="test prompt", aspect_ratio="16:9")
 
     # Verify
@@ -71,7 +71,7 @@ def test_generate_image_short_aspect_ratio(mock_sleep, mock_post, mock_get):
     mock_get.side_effect = [poll_response, download_response]
 
     # Execute
-    client = HiggsfileClient(api_key="test-api-key")
+    client = HiggsfileClient(api_key="test-id:test-secret")
     client.generate_image(prompt="test prompt", aspect_ratio="9:16")
 
     # Verify aspect_ratio and primary model in the POST request
@@ -106,7 +106,7 @@ def test_generate_image_falls_back_to_seedream_on_primary_failure(mock_sleep, mo
     download_response.__exit__ = Mock(return_value=False)
     mock_get.side_effect = [poll_response, download_response]
 
-    client = HiggsfileClient(api_key="test-api-key")
+    client = HiggsfileClient(api_key="test-id:test-secret")
     result = client.generate_image(prompt="test prompt", aspect_ratio="16:9")
 
     assert isinstance(result, Image.Image)
@@ -127,7 +127,7 @@ def test_generate_image_skips_model_fallback_on_5xx(mock_sleep, mock_post, mock_
     http_err = requests.HTTPError(response=fake_response)
     mock_post.return_value.raise_for_status.side_effect = http_err
 
-    client = HiggsfileClient(api_key="test-api-key")
+    client = HiggsfileClient(api_key="test-id:test-secret")
     with pytest.raises(requests.HTTPError):
         client.generate_image(prompt="test prompt", aspect_ratio="16:9")
 
@@ -151,7 +151,7 @@ def test_generate_image_raises_on_api_failure(mock_sleep, mock_post, mock_get):
     mock_get.return_value = poll_response
 
     # Execute and verify
-    client = HiggsfileClient(api_key="test-api-key")
+    client = HiggsfileClient(api_key="test-id:test-secret")
     with pytest.raises(RuntimeError, match="Higgsfield job job-abc failed"):
         client.generate_image(prompt="test prompt", aspect_ratio="16:9")
 
@@ -173,7 +173,7 @@ def test_generate_image_raises_on_timeout(mock_sleep, mock_post, mock_get):
     mock_get.return_value = poll_response
 
     # Execute and verify — timeout on primary triggers fallback which also times out
-    client = HiggsfileClient(api_key="test-api-key")
+    client = HiggsfileClient(api_key="test-id:test-secret")
     with pytest.raises(TimeoutError, match="Higgsfield job job-abc timed out"):
         client.generate_image(prompt="test prompt", aspect_ratio="16:9")
 
@@ -184,8 +184,8 @@ def test_generate_image_raises_on_timeout(mock_sleep, mock_post, mock_get):
 @patch("agents.production.higgsfield_client.requests.get")
 @patch("agents.production.higgsfield_client.requests.post")
 @patch("agents.production.higgsfield_client.time.sleep")
-def test_bearer_auth_header_sent(mock_sleep, mock_post, mock_get):
-    """Verify that the Authorization header sent in the POST is Bearer auth."""
+def test_basic_auth_header_sent(mock_sleep, mock_post, mock_get):
+    """Verify that the Authorization header sent in the POST is Basic auth over 'key_id:key_secret'."""
     # Setup mocks
     mock_post.return_value.json.return_value = {"results": [{"id": "job-abc"}]}
 
@@ -205,10 +205,12 @@ def test_bearer_auth_header_sent(mock_sleep, mock_post, mock_get):
     mock_get.side_effect = [poll_response, download_response]
 
     # Execute
-    client = HiggsfileClient(api_key="test-api-key")
+    client = HiggsfileClient(api_key="test-id:test-secret")
     client.generate_image(prompt="test prompt", aspect_ratio="16:9")
 
-    # Verify Authorization header in POST is Bearer auth
+    # Verify Authorization header in POST is Basic auth over "test-id:test-secret"
+    import base64
+    expected = "Basic " + base64.b64encode(b"test-id:test-secret").decode()
     mock_post.assert_called_once()
     call_kwargs = mock_post.call_args[1]
-    assert call_kwargs["headers"]["Authorization"] == "Bearer test-api-key"
+    assert call_kwargs["headers"]["Authorization"] == expected

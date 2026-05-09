@@ -1,4 +1,3 @@
-import base64
 import io
 import time
 import requests
@@ -14,10 +13,7 @@ class HiggsfileClient:
     def __init__(self, api_key: str) -> None:
         if not api_key or not api_key.strip():
             raise ValueError("HIGGSFIELD_API_KEY cannot be empty")
-        if ":" not in api_key:
-            raise ValueError("HIGGSFIELD_API_KEY must be in format 'key_id:key_secret'")
-        token = base64.b64encode(api_key.encode()).decode()
-        self._headers = {"Authorization": f"Basic {token}"}
+        self._headers = {"Authorization": f"Bearer {api_key}"}
 
     def generate_image(self, prompt: str, aspect_ratio: str) -> Image.Image:
         try:

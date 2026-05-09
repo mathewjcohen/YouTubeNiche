@@ -1,14 +1,13 @@
-import base64
 import io
 import time
 import requests
 from PIL import Image
 
-_BASE_URL = "https://api.higgsfield.ai"
+_BASE_URL = "https://platform.higgsfield.ai"
+_SUBMIT_PATH = "/higgsfield-ai/soul/standard"
+_RESOLUTION = "720p"
 _POLL_INTERVAL = 5
 _MAX_POLLS = 24  # 2 minutes max
-_PRIMARY_MODEL = "nano_banana_2"
-_FALLBACK_MODEL = "seedream_v5_lite"
 
 class HiggsfileClient:
     def __init__(self, api_key: str) -> None:
@@ -16,31 +15,18 @@ class HiggsfileClient:
             raise ValueError("HIGGSFIELD_API_KEY cannot be empty")
         if ":" not in api_key:
             raise ValueError("HIGGSFIELD_API_KEY must be in format 'key_id:key_secret'")
-        token = base64.b64encode(api_key.encode()).decode()
-        self._headers = {"Authorization": f"Basic {token}"}
+        self._headers = {"Authorization": f"Key {api_key}"}
 
     def generate_image(self, prompt: str, aspect_ratio: str) -> Image.Image:
-        try:
-            job_id = self._submit(prompt, aspect_ratio, _PRIMARY_MODEL)
-            raw_url = self._poll(job_id)
-        except requests.HTTPError as primary_err:
-            resp = primary_err.response
-            if resp is not None and resp.status_code >= 500:
-                raise  # server-side outage; fallback model hits the same dead endpoint
-            print(f"[higgsfield] {_PRIMARY_MODEL} failed ({primary_err}), falling back to {_FALLBACK_MODEL}")
-            job_id = self._submit(prompt, aspect_ratio, _FALLBACK_MODEL)
-            raw_url = self._poll(job_id)
-        except Exception as primary_err:
-            print(f"[higgsfield] {_PRIMARY_MODEL} failed ({primary_err}), falling back to {_FALLBACK_MODEL}")
-            job_id = self._submit(prompt, aspect_ratio, _FALLBACK_MODEL)
-            raw_url = self._poll(job_id)
+        job_id = self._submit(prompt, aspect_ratio)
+        raw_url = self._poll(job_id)
         return self._download(raw_url)
 
-    def _submit(self, prompt: str, aspect_ratio: str, model: str) -> str:
+    def _submit(self, prompt: str, aspect_ratio: str) -> str:
         resp = requests.post(
-            f"{_BASE_URL}/v1/generations",
+            f"{_BASE_URL}{_SUBMIT_PATH}",
             headers=self._headers,
-            json={"model": model, "prompt": prompt, "aspect_ratio": aspect_ratio},
+            json={"prompt": prompt, "aspect_ratio": aspect_ratio, "resolution": _RESOLUTION},
             timeout=30,
         )
         resp.raise_for_status()
@@ -50,7 +36,7 @@ class HiggsfileClient:
         for _ in range(_MAX_POLLS):
             time.sleep(_POLL_INTERVAL)
             resp = requests.get(
-                f"{_BASE_URL}/v1/generations/{job_id}",
+                f"{_BASE_URL}{_SUBMIT_PATH}/{job_id}",
                 headers=self._headers,
                 timeout=15,
             )

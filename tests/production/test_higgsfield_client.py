@@ -43,7 +43,7 @@ def _mock_download_response():
 @patch("agents.production.higgsfield_client.time.sleep")
 def test_generate_image_returns_pil_image(mock_sleep, mock_post, mock_get):
     """Happy path: fetch styles → submit → poll once (completed) → download returns PIL Image."""
-    mock_post.return_value.json.return_value = {"request_id": "job-abc", "status": "queued"}
+    mock_post.return_value.json.return_value = {"id": "set-abc", "jobs": [{"id": "job-abc", "status": "queued"}]}
     mock_get.side_effect = [_mock_styles_response(), _mock_poll_completed(), _mock_download_response()]
 
     client = HiggsfileClient(api_key="test-id:test-secret")
@@ -59,7 +59,7 @@ def test_generate_image_returns_pil_image(mock_sleep, mock_post, mock_get):
 @patch("agents.production.higgsfield_client.time.sleep")
 def test_generate_image_post_body(mock_sleep, mock_post, mock_get):
     """POST body nests fields under params; aspect_ratio maps to width_and_height; no top-level model."""
-    mock_post.return_value.json.return_value = {"request_id": "job-abc", "status": "queued"}
+    mock_post.return_value.json.return_value = {"id": "set-abc", "jobs": [{"id": "job-abc", "status": "queued"}]}
     mock_get.side_effect = [_mock_styles_response(), _mock_poll_completed(), _mock_download_response()]
 
     client = HiggsfileClient(api_key="test-id:test-secret")
@@ -81,7 +81,7 @@ def test_generate_image_post_body(mock_sleep, mock_post, mock_get):
 @patch("agents.production.higgsfield_client.time.sleep")
 def test_generate_image_raises_on_api_failure(mock_sleep, mock_post, mock_get):
     """Poll returns status='failed' → raises RuntimeError."""
-    mock_post.return_value.json.return_value = {"request_id": "job-abc", "status": "queued"}
+    mock_post.return_value.json.return_value = {"id": "set-abc", "jobs": [{"id": "job-abc", "status": "queued"}]}
     failed_poll = Mock()
     failed_poll.json.return_value = {"status": "failed", "request_id": "job-abc"}
     mock_get.side_effect = [_mock_styles_response(), failed_poll]
@@ -96,7 +96,7 @@ def test_generate_image_raises_on_api_failure(mock_sleep, mock_post, mock_get):
 @patch("agents.production.higgsfield_client.time.sleep")
 def test_generate_image_raises_on_timeout(mock_sleep, mock_post, mock_get):
     """Poll always returns status='in_progress' for _MAX_POLLS iterations → raises TimeoutError."""
-    mock_post.return_value.json.return_value = {"request_id": "job-abc", "status": "queued"}
+    mock_post.return_value.json.return_value = {"id": "set-abc", "jobs": [{"id": "job-abc", "status": "queued"}]}
     in_progress = Mock()
     in_progress.json.return_value = {"status": "in_progress", "request_id": "job-abc"}
     mock_get.side_effect = [_mock_styles_response()] + [in_progress] * 24
@@ -113,7 +113,7 @@ def test_generate_image_raises_on_timeout(mock_sleep, mock_post, mock_get):
 @patch("agents.production.higgsfield_client.time.sleep")
 def test_separate_auth_headers_sent(mock_sleep, mock_post, mock_get):
     """Auth uses separate hf-api-key and hf-secret headers — no Authorization header."""
-    mock_post.return_value.json.return_value = {"request_id": "job-abc", "status": "queued"}
+    mock_post.return_value.json.return_value = {"id": "set-abc", "jobs": [{"id": "job-abc", "status": "queued"}]}
     mock_get.side_effect = [_mock_styles_response(), _mock_poll_completed(), _mock_download_response()]
 
     client = HiggsfileClient(api_key="test-id:test-secret")
@@ -130,7 +130,7 @@ def test_separate_auth_headers_sent(mock_sleep, mock_post, mock_get):
 @patch("agents.production.higgsfield_client.time.sleep")
 def test_submit_uses_correct_endpoint(mock_sleep, mock_post, mock_get):
     """POST is sent to /v1/text2image/soul."""
-    mock_post.return_value.json.return_value = {"request_id": "job-abc", "status": "queued"}
+    mock_post.return_value.json.return_value = {"id": "set-abc", "jobs": [{"id": "job-abc", "status": "queued"}]}
     mock_get.side_effect = [_mock_styles_response(), _mock_poll_completed(), _mock_download_response()]
 
     client = HiggsfileClient(api_key="test-id:test-secret")

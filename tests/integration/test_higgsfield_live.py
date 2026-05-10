@@ -69,10 +69,11 @@ print(f"POST response: {resp.json()}")
 print()
 
 submit_data = resp.json()
-job_id = submit_data.get("request_id")
-if not job_id:
-    print("ERROR: No request_id in submit response")
+jobs = submit_data.get("jobs", [])
+if not jobs:
+    print("ERROR: No jobs in submit response")
     sys.exit(1)
+job_id = jobs[0]["id"]
 
 print(f"Job ID: {job_id}")
 print("Polling...")

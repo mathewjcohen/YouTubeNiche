@@ -126,7 +126,7 @@ class PipelineRunner:
         print(f"[pipeline]   → running voiceover for '{niche.get('name')}'")
         from agents.production.voiceover import VoiceoverAgent
         agent = VoiceoverAgent(supabase=self._sb, gate_client=self._gate)
-        agent.process_approved_scripts(niche["id"])
+        agent.process_approved_scripts(niche["id"], limit=1)
 
     def _run_video_assembler(self, niche: dict, render_method: str) -> None:
         print(f"[pipeline]   → running video_assembler for '{niche.get('name')}' (render_method={render_method})")

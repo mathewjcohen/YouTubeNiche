@@ -26,6 +26,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube",
     "https://www.googleapis.com/auth/yt-analytics.readonly",
 ]
+VIDEOS_PER_RUN = 1   # long+short pairs to upload per pipeline run
 
 
 def build_youtube_service(token_dict: Optional[Dict] = None):
@@ -246,19 +247,30 @@ class YouTubeUploader:
             print(f"[uploader] niche {niche_id} has no linked YouTube channel — skipping upload")
             return
 
-        query = (
-            self._sb.table("videos")
-            .select("*, scripts(youtube_title, youtube_description, youtube_tags)")
-            .eq("niche_id", niche_id)
-            .eq("gate6_state", "approved")
-            .eq("status", "approved")
-        )
-        if video_type_filter:
-            query = query.eq("video_type", video_type_filter)
-        videos = execute_with_retry(query).data
+        def _query_type(vtype: str) -> list:
+            return execute_with_retry(
+                self._sb.table("videos")
+                .select("*, scripts(youtube_title, youtube_description, youtube_tags)")
+                .eq("niche_id", niche_id)
+                .eq("gate6_state", "approved")
+                .eq("status", "approved")
+                .eq("video_type", vtype)
+                .limit(VIDEOS_PER_RUN)
+            ).data
 
-        # Upload long+short as a pair per script: long first so the link is available for the short
-        videos.sort(key=lambda v: (v["script_id"], 0 if v["video_type"] == "long" else 1))
+        if video_type_filter:
+            videos = execute_with_retry(
+                self._sb.table("videos")
+                .select("*, scripts(youtube_title, youtube_description, youtube_tags)")
+                .eq("niche_id", niche_id)
+                .eq("gate6_state", "approved")
+                .eq("status", "approved")
+                .eq("video_type", video_type_filter)
+                .limit(VIDEOS_PER_RUN)
+            ).data
+        else:
+            # Long first so the YouTube link is available when the short is uploaded
+            videos = _query_type("long") + _query_type("short")
 
         # Track long video IDs uploaded this run: script_id → youtube_video_id
         long_yt_ids: Dict[str, str] = {}

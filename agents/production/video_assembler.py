@@ -24,6 +24,7 @@ from agents.shared.db_retry import execute_with_retry
 BROLL_PATTERN = re.compile(r"\[B-ROLL:\s*(.+?)\]", re.IGNORECASE)
 CLIPS_PER_TAG = 3    # clips fetched per B-ROLL tag
 MAX_CLIP_SEC = 15    # cap clip length so cuts stay snappy
+VIDEOS_PER_RUN = 1   # long+short pairs to assemble per pipeline run
 
 
 def extract_scene_tags(script: str) -> List[str]:
@@ -196,15 +197,20 @@ class VideoAssembler:
             except Exception as exc:
                 print(f"[assembler] s3 audio cleanup failed (non-fatal): {exc}")
 
-    def process_approved_voiceovers(self, niche_id: str) -> None:
-        videos = execute_with_retry(
+    def _query_pending_videos(self, niche_id: str, video_type: str) -> list:
+        return execute_with_retry(
             self._sb.table("videos")
             .select("*, scripts(long_form_text, short_text)")
             .eq("niche_id", niche_id)
             .eq("gate4_state", "approved")
             .eq("gate5_state", "approved")
             .eq("status", "pending")
+            .eq("video_type", video_type)
+            .limit(VIDEOS_PER_RUN)
         ).data
+
+    def process_approved_voiceovers(self, niche_id: str) -> None:
+        videos = self._query_pending_videos(niche_id, "long") + self._query_pending_videos(niche_id, "short")
         for video in videos:
             try:
                 scripts_data = video.get("scripts")

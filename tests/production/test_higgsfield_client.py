@@ -72,6 +72,7 @@ def test_generate_image_post_body(mock_sleep, mock_post, mock_get):
     assert params["width_and_height"] == "1152x2048"
     assert params["prompt"] == "test prompt"
     assert params["style_id"] == "style-uuid-123"
+    assert params["custom_reference_id"] is None
     assert "model" not in body
 
 

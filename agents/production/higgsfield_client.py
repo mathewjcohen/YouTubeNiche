@@ -58,7 +58,7 @@ class HiggsfileClient:
                     "enhance_prompt": False,
                     "style_strength": 1,
                     "image_reference": None,
-                    "custom_reference_id": "",
+                    "custom_reference_id": None,
                     "custom_reference_strength": 1,
                 },
                 "webhook": None,

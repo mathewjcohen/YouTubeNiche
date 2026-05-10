@@ -62,10 +62,8 @@ def _safe_median(vals: list) -> Optional[float]:
 
 class InsightsAgent:
     def __init__(self):
-        patch_postgrest_http1()
-        self._sb: Client = create_client(
-            get_env("SUPABASE_URL"),
-            get_env("SUPABASE_SERVICE_KEY"),
+        self._sb: Client = patch_postgrest_http1(
+            create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY"))
         )
 
     # ------------------------------------------------------------------

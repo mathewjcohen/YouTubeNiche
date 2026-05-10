@@ -89,11 +89,12 @@ for i in range(24):
 
     status = data.get("status")
     if status == "completed":
-        raw_url = data.get("results", {}).get("rawUrl")
-        if not raw_url:
-            print(f"\nERROR: status=completed but no results.rawUrl in response")
+        images = data.get("images", [])
+        if not images:
+            print(f"\nERROR: status=completed but no images in response")
             print(f"Full response: {data}")
             sys.exit(1)
+        raw_url = images[0]["url"]
         print(f"\nSUCCESS — rawUrl: {raw_url}")
 
         img_resp = requests.get(raw_url, timeout=30)

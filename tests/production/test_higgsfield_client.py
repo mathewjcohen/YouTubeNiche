@@ -25,7 +25,7 @@ def _mock_poll_completed():
     m.json.return_value = {
         "status": "completed",
         "request_id": "job-abc",
-        "results": {"rawUrl": "https://cdn.higgsfield.ai/img.jpg"},
+        "images": [{"url": "https://cdn.higgsfield.ai/img.jpg"}],
     }
     return m
 

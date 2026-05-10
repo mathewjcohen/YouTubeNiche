@@ -80,7 +80,7 @@ class HiggsfileClient:
             data = resp.json()
             status = data["status"]
             if status == "completed":
-                return data["results"]["rawUrl"]
+                return data["images"][0]["url"]
             if status in ("failed", "nsfw", "canceled"):
                 raise RuntimeError(f"Higgsfield job {job_id} ended with status: {status}")
         raise TimeoutError(f"Higgsfield job {job_id} timed out after {_MAX_POLLS * _POLL_INTERVAL}s")

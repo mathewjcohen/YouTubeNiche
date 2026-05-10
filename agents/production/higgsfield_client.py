@@ -66,7 +66,7 @@ class HiggsfileClient:
             timeout=30,
         )
         resp.raise_for_status()
-        return resp.json()["jobs"][0]["id"]
+        return resp.json()["id"]
 
     def _poll(self, job_id: str) -> str:
         for _ in range(_MAX_POLLS):

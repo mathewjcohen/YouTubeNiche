@@ -237,17 +237,21 @@ class ThumbnailGenerator:
     def process_approved_scripts(self, niche_id: str) -> None:
         if not self._sb or not self._gate:
             raise RuntimeError("supabase and gate_client required for pipeline use")
+        # Inner join: only scripts that have at least one video row
         scripts = (
             self._sb.table("scripts")
-            .select("*, niches(category)")
+            .select("*, niches(category), videos!inner(id, video_type, gate5_state)")
             .eq("niche_id", niche_id)
             .eq("gate3_state", "approved")
             .execute()
             .data
         )
-        print(f"[thumbnail] {len(scripts)} approved script(s) found for niche {niche_id}")
+        print(f"[thumbnail] {len(scripts)} script(s) with video rows for niche {niche_id}")
         for script in scripts:
             category = script["niches"]["category"]
+            pending_videos = [v for v in script.get("videos", []) if v.get("gate5_state") != "approved"]
+            if not pending_videos:
+                continue
             # Fetch Pexels photo once per script; reuse for both long and short
             shared_bg: Optional[Image.Image] = None
             if self._pexels_key and not self._replicate:
@@ -259,7 +263,8 @@ class ThumbnailGenerator:
                             break
                     except Exception as exc:
                         print(f"[thumbnail] Pexels fetch failed for query '{query}': {type(exc).__name__}: {exc}")
-            for video_type in ("long", "short"):
+            for video in pending_videos:
+                video_type = video["video_type"]
                 stem = f"{script['id'][:8]}_{video_type}_thumb"
                 try:
                     out = self.render(
@@ -273,37 +278,20 @@ class ThumbnailGenerator:
                     print(f"[thumbnail] render failed for {stem}: {exc}")
                     continue
                 try:
-                    videos = (
-                        self._sb.table("videos")
-                        .select("id, gate5_state")
-                        .eq("script_id", script["id"])
-                        .eq("video_type", video_type)
-                        .execute()
-                        .data
-                    )
-                    print(f"[thumbnail] found {len(videos)} video row(s) for {stem}")
-                    if not videos:
-                        print(f"[thumbnail] no video rows found for script {script['id']} ({video_type}) — skipping upload")
-                        continue
-                    pending_videos = [v for v in videos if v.get("gate5_state") != "approved"]
-                    if not pending_videos:
-                        print(f"[thumbnail] all video rows already approved for {stem} — skipping")
-                        continue
                     thumb_url = self._upload(out)
                     print(f"[thumbnail] uploaded → {thumb_url}")
-                    for video in pending_videos:
-                        self._sb.table("videos").update(
-                            {"thumbnail_path": thumb_url}
-                        ).eq("id", video["id"]).execute()
-                        self._gate.advance_or_pause(
-                            gate=GateNumber.THUMBNAIL,
-                            niche_id=niche_id,
-                            table="videos",
-                            item_id=video["id"],
-                            gate_column="gate5_state",
-                            auto_state="approved",
-                            review_state="awaiting_review",
-                        )
-                    print(f"[thumbnail] updated {len(videos)} video row(s) for {stem}")
+                    self._sb.table("videos").update(
+                        {"thumbnail_path": thumb_url}
+                    ).eq("id", video["id"]).execute()
+                    self._gate.advance_or_pause(
+                        gate=GateNumber.THUMBNAIL,
+                        niche_id=niche_id,
+                        table="videos",
+                        item_id=video["id"],
+                        gate_column="gate5_state",
+                        auto_state="approved",
+                        review_state="awaiting_review",
+                    )
+                    print(f"[thumbnail] updated video row for {stem}")
                 except Exception as exc:
                     print(f"[thumbnail] upload/db update failed for {stem}: {exc}")

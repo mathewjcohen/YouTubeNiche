@@ -112,6 +112,7 @@ class PipelineRunner:
             supabase=self._sb,
             gate_client=self._gate,
             pexels_api_key=get_env("PEXELS_API_KEY"),
+            replicate_api_key=get_env("REPLICATE_API_KEY", required=False),
         )
         gen.process_approved_scripts(niche["id"])
 

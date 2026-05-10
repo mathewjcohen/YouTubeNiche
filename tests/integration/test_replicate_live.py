@@ -53,7 +53,7 @@ resp = requests.post(
             ),
             "size": "2K",
             "aspect_ratio": "16:9",
-            "output_format": "webp",
+            "output_format": "jpeg",
         }
     },
     timeout=30,
@@ -92,7 +92,7 @@ for i in range(24):
         print(f"\nSUCCESS — url: {raw_url}")
 
         img_resp = requests.get(raw_url, timeout=30)
-        tmp = tempfile.NamedTemporaryFile(suffix=".webp", delete=False)
+        tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
         tmp.write(img_resp.content)
         tmp.close()
         print(f"Saved to: {tmp.name}")

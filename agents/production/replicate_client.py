@@ -6,7 +6,7 @@ from PIL import Image
 _BASE_URL = "https://api.replicate.com"
 _PREDICTIONS_PATH = "/v1/models/bytedance/seedream-5-lite/predictions"
 _SIZE = "2K"
-_OUTPUT_FORMAT = "webp"
+_OUTPUT_FORMAT = "jpeg"
 _POLL_INTERVAL = 5
 _MAX_POLLS = 24  # 2 minutes max
 

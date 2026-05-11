@@ -70,7 +70,7 @@ def test_generate_image_post_body(mock_sleep, mock_post, mock_get):
     assert inp["prompt"] == "test prompt"
     assert inp["aspect_ratio"] == "9:16"
     assert inp["size"] == "2K"
-    assert inp["output_format"] == "webp"
+    assert inp["output_format"] == "jpeg"
     assert "version" not in body
 
 

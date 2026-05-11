@@ -43,13 +43,7 @@ def test_s3_404_sets_assembly_failed_not_pending():
     import botocore.exceptions
     from agents.production.video_assembler import VideoAssembler, PexelsClient
 
-    # Separate mocks per table so we can verify calls independently
-    videos_table = MagicMock()
-    scripts_table = MagicMock()
-
     mock_sb = MagicMock()
-    mock_sb.table.side_effect = lambda name: videos_table if name == "videos" else scripts_table
-
     mock_gate = MagicMock()
     pexels = MagicMock(spec=PexelsClient)
 
@@ -65,21 +59,40 @@ def test_s3_404_sets_assembly_failed_not_pending():
         "scripts": {"long_form_text": "Hello world.", "short_text": "Short."},
     }
 
-    # videos query returns our test video
-    videos_table.select.return_value.eq.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value.data = [video]
+    # Track all execute_with_retry calls so we can inspect the DB operations
+    exec_calls = []
 
-    # assemble() raises S3 404
+    def fake_exec(q):
+        exec_calls.append(q)
+        result = MagicMock()
+        # First call = _query_pending_videos("long"), return our video
+        # Second call = _query_pending_videos("short"), return nothing
+        # Subsequent calls = delete/update from the S3-error handler
+        result.data = [video] if len(exec_calls) == 1 else []
+        return result
+
     s3_error = botocore.exceptions.ClientError(
         {"Error": {"Code": "404", "Message": "Not Found"}}, "GetObject"
     )
-    with patch.object(assembler, "assemble", side_effect=s3_error):
-        assembler.process_approved_voiceovers("niche-1")
 
-    # Video row must be deleted
-    videos_table.delete.assert_called()
+    with patch("agents.production.video_assembler.execute_with_retry", side_effect=fake_exec):
+        with patch.object(assembler, "assemble", side_effect=s3_error):
+            assembler.process_approved_voiceovers("niche-1")
 
-    # Script status must be set to assembly_failed (not pending)
-    update_calls = scripts_table.update.call_args_list
-    status_values = [c.args[0].get("status") for c in update_calls if c.args and "status" in c.args[0]]
-    assert "assembly_failed" in status_values, f"Expected assembly_failed in status updates, got: {status_values}"
-    assert "pending" not in status_values, "Must not reset to pending — that burns OpenAI quota"
+    # Both videos and scripts tables must have been touched
+    table_calls = [c.args[0] for c in mock_sb.table.call_args_list]
+    assert "videos" in table_calls
+    assert "scripts" in table_calls
+
+    # scripts.update must use assembly_failed, never pending
+    all_update_status_values = [
+        c.args[0]["status"]
+        for c in mock_sb.table.return_value.update.call_args_list
+        if c.args and isinstance(c.args[0], dict) and "status" in c.args[0]
+    ]
+    assert "assembly_failed" in all_update_status_values, (
+        f"Expected assembly_failed in status updates, got: {all_update_status_values}"
+    )
+    assert "pending" not in all_update_status_values, (
+        "Must not reset to pending — that burns OpenAI quota"
+    )

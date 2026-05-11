@@ -29,17 +29,17 @@ MAX_RETENTION_FETCHES_PER_NICHE = 10
 class NichePerformance:
     views_total: int
     avg_watch_time_pct: float        # true weighted avg from YouTube's averageViewPercentage (0–1)
-    avg_view_duration_sec: float     # weighted avg seconds watched
-    impressions: int
-    long_views: int
-    long_avg_view_duration_sec: float
-    long_avg_watch_pct: float
-    short_views: int
-    short_avg_view_duration_sec: float
-    short_avg_watch_pct: float
-    subscribers_gained: int
-    estimated_minutes_watched: int
-    likes: int
+    avg_view_duration_sec: float = 0.0
+    impressions: int = 0
+    long_views: int = 0
+    long_avg_view_duration_sec: float = 0.0
+    long_avg_watch_pct: float = 0.0
+    short_views: int = 0
+    short_avg_view_duration_sec: float = 0.0
+    short_avg_watch_pct: float = 0.0
+    subscribers_gained: int = 0
+    estimated_minutes_watched: int = 0
+    likes: int = 0
     videos_published: int = 0
     shorts_published: int = 0
     traffic_sources: dict = field(default_factory=dict)

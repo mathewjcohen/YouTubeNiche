@@ -206,9 +206,12 @@ def test_process_approved_videos_inserts_published_and_deletes_row(uploader):
             calls.append(q)
             result = MagicMock()
             if len(calls) == 1:
-                # Fetch approved videos
+                # _query_type("long"): fetch long videos
                 result.data = [video]
             elif len(calls) == 2:
+                # _query_type("short"): no shorts this run
+                result.data = []
+            elif len(calls) == 3:
                 # Atomic claim: update status=uploading
                 result.data = [{"id": video_id}]
             else:
@@ -222,5 +225,5 @@ def test_process_approved_videos_inserts_published_and_deletes_row(uploader):
                 with patch.object(uploader, "_delete_supabase_assets"):
                     uploader.process_approved_videos(niche_id)
 
-    # fetch, claim, update uploaded, insert published, delete row, check remaining, mark done
-    assert mock_exec.call_count >= 4
+    # long-fetch, short-fetch, claim, update uploaded, insert published, delete row, check remaining, mark done
+    assert mock_exec.call_count >= 5

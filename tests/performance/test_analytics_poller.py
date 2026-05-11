@@ -42,7 +42,6 @@ def test_should_flag_early_returns_false_when_not_viral():
 
 def test_poll_niche_skips_when_no_videos():
     mock_sb = MagicMock()
-    mock_sb.table.return_value.select.return_value.eq.return_value.not_.is_.return_value = MagicMock()
     execute_mock = MagicMock()
     execute_mock.data = []
 
@@ -53,7 +52,7 @@ def test_poll_niche_skips_when_no_videos():
             "agents.performance.analytics_poller.execute_with_retry",
             lambda q: execute_mock,
         )
-        result = poller.poll_niche("niche-1", "UCxxx", MagicMock())
+        result = poller.poll_niche("niche-1", "UCxxx", MagicMock(), MagicMock(), [])
 
     assert result is None
 
@@ -74,7 +73,7 @@ def test_poll_niche_raises_on_api_error():
             lambda q: execute_mock,
         )
         with pytest.raises(Exception, match="403 Forbidden"):
-            poller.poll_niche("niche-1", "UCxxx", mock_analytics)
+            poller.poll_niche("niche-1", "UCxxx", mock_analytics, MagicMock(), [])
 
 
 def test_fetch_published_videos_queries_published_videos_table():
@@ -89,12 +88,11 @@ def test_fetch_published_videos_queries_published_videos_table():
 
     with pytest.MonkeyPatch().context() as mp:
         mp.setattr("agents.performance.analytics_poller.execute_with_retry", lambda q: execute_mock)
-        ids, longs, shorts = poller._fetch_published_videos("niche-1")
+        rows = poller._fetch_published_videos("niche-1")
 
-    assert ids == ["vid-long-1", "vid-short-1"]
-    assert longs == 1
-    assert shorts == 1
-    # Verify correct table
+    assert [r["youtube_video_id"] for r in rows] == ["vid-long-1", "vid-short-1"]
+    assert sum(1 for r in rows if r["video_type"] == "long") == 1
+    assert sum(1 for r in rows if r["video_type"] == "short") == 1
     assert mock_sb.table.call_args.args[0] == "published_videos"
 
 
@@ -112,13 +110,18 @@ def test_run_raises_after_all_niches_attempted_on_partial_failure():
 
     call_count = {"n": 0}
 
-    def fake_poll(niche_id, channel_id, svc):
+    def fake_poll(niche_id, channel_id, analytics, yt_service, all_ids):
         call_count["n"] += 1
         if niche_id == "niche-bad":
             raise Exception("403 Forbidden")
         return NichePerformance(views_total=10, avg_watch_time_pct=0.20)
 
     poller.poll_niche = fake_poll
+    poller._fetch_published_videos = lambda niche_id: []
+    poller._backfill_published_video_metadata = lambda *a, **kw: None
+    poller._sync_published_videos = lambda *a, **kw: None
+    poller._recover_pipeline_videos = lambda *a, **kw: 0
+    poller._discover_channel_orphans = lambda *a, **kw: 0
 
     def fake_execute(q):
         return niche_data

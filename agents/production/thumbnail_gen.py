@@ -115,6 +115,22 @@ class ThumbnailGenerator:
             for video in pending_videos:
                 video_type = video["video_type"]
                 stem = f"{script['id'][:8]}_{video_type}_thumb"
+
+                if video_type == "short":
+                    # YouTube does not display custom thumbnails for Shorts on
+                    # ineligible channels; skip generation and auto-approve gate5.
+                    self._gate.advance_or_pause(
+                        gate=GateNumber.THUMBNAIL,
+                        niche_id=niche_id,
+                        table="videos",
+                        item_id=video["id"],
+                        gate_column="gate5_state",
+                        auto_state="approved",
+                        review_state="awaiting_review",
+                    )
+                    print(f"[thumbnail] short {video['id'][:8]} — gate5 auto-approved, no thumbnail generated")
+                    continue
+
                 try:
                     out = self.render(
                         title=script["youtube_title"],

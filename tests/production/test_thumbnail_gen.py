@@ -1,6 +1,7 @@
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 from PIL import Image
+from agents.shared.gate_client import GateNumber
 from agents.production.thumbnail_gen import ThumbnailGenerator, _build_replicate_prompt
 
 
@@ -57,3 +58,41 @@ def test_build_replicate_prompt_includes_title_and_orientation():
     assert "16:9" in long_prompt
     assert "Tax Secrets" in short_prompt
     assert "9:16" in short_prompt
+
+
+def test_process_approved_scripts_skips_render_for_shorts(tmp_path):
+    """Shorts auto-approve gate5 without calling Replicate."""
+    gen, mock_replicate = _mock_gen(tmp_path)
+    mock_gate = MagicMock()
+    mock_sb = MagicMock()
+    gen._gate = mock_gate
+    gen._sb = mock_sb
+
+    short_id = "aaaa-bbbb-cccc-dddd"
+    script_row = {
+        "id": "script-1234-5678-abcd",
+        "youtube_title": "Why Your Landlord Can't Do That",
+        "niches": {"category": "legal"},
+        "videos": [{"id": short_id, "video_type": "short", "gate5_state": "awaiting_review"}],
+    }
+    (
+        mock_sb.table.return_value
+        .select.return_value
+        .eq.return_value
+        .eq.return_value
+        .execute.return_value
+        .data
+    ) = [script_row]
+
+    gen.process_approved_scripts("niche-xyz")
+
+    mock_replicate.generate_image.assert_not_called()
+    mock_gate.advance_or_pause.assert_called_once_with(
+        gate=GateNumber.THUMBNAIL,
+        niche_id="niche-xyz",
+        table="videos",
+        item_id=short_id,
+        gate_column="gate5_state",
+        auto_state="approved",
+        review_state="awaiting_review",
+    )

@@ -269,8 +269,32 @@ class YouTubeUploader:
                 .limit(VIDEOS_PER_RUN)
             ).data
         else:
-            # Long first so the YouTube link is available when the short is uploaded
-            videos = _query_type("long") + _query_type("short")
+            # Pick one script whose long is ready, then fetch both its videos together so
+            # the long is always uploaded before its short in the same run.
+            long_candidates = execute_with_retry(
+                self._sb.table("videos")
+                .select("script_id")
+                .eq("niche_id", niche_id)
+                .eq("gate6_state", "approved")
+                .eq("status", "approved")
+                .eq("video_type", "long")
+                .limit(1)
+            ).data
+            if long_candidates:
+                target_script_id = long_candidates[0]["script_id"]
+                all_for_script = execute_with_retry(
+                    self._sb.table("videos")
+                    .select("*, scripts(youtube_title, youtube_description, youtube_tags)")
+                    .eq("niche_id", niche_id)
+                    .eq("gate6_state", "approved")
+                    .eq("status", "approved")
+                    .eq("script_id", target_script_id)
+                ).data
+                # Long before short so link is available when short description is built
+                videos = sorted(all_for_script, key=lambda v: 0 if v["video_type"] == "long" else 1)
+            else:
+                # No longs in queue — upload shorts whose longs are already in published_videos
+                videos = _query_type("short")
 
         # Track long video IDs uploaded this run: script_id → youtube_video_id
         long_yt_ids: Dict[str, str] = {}

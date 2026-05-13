@@ -51,13 +51,14 @@ def test_render_raises_without_replicate(tmp_path):
         gen.render("Tax Secrets Exposed", "tax", "test_no_key")
 
 
-def test_build_replicate_prompt_includes_title_and_orientation():
+def test_build_replicate_prompt_orientation_and_no_text():
     long_prompt = _build_replicate_prompt("Tax Secrets", "tax", is_short=False)
     short_prompt = _build_replicate_prompt("Tax Secrets", "tax", is_short=True)
-    assert "Tax Secrets" in long_prompt
     assert "16:9" in long_prompt
-    assert "Tax Secrets" in short_prompt
     assert "9:16" in short_prompt
+    # Title is overlaid by Pillow — must NOT be baked into the AI prompt
+    assert "Tax Secrets" not in long_prompt
+    assert "no text" in long_prompt.lower()
 
 
 def test_process_approved_scripts_skips_render_for_shorts(tmp_path):

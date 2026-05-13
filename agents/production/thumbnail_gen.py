@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from supabase import Client
 
 from agents.shared.gate_client import GateClient, GateNumber
@@ -12,15 +12,98 @@ THUMB_W, THUMB_H = 1280, 720          # long-form 16:9
 SHORT_W, SHORT_H = 1080, 1920         # shorts 9:16
 
 _CATEGORY_STYLE: dict[str, str] = {
-    "legal": "courtroom and law books background, gold accents",
-    "insurance": "professional office with documents background, green accents",
-    "tax": "tax forms and IRS documents background, red and orange warning accents",
-    "personal_finance": "financial charts and money background, blue accents",
-    "real_estate": "house exterior and property listing background, orange accents",
-    "career": "professional office and business meeting background, purple accents",
-    "ai_tech": "futuristic technology and glowing circuits background, cyan accents",
-    "health": "medical setting and doctor background, teal accents",
+    "legal": "dramatic courtroom with a spotlight, rich gold and deep navy, law books and gavel",
+    "insurance": "stormy sky with lightning bolts, electric blue and vivid orange fire accents",
+    "tax": "explosive red and orange flames, glowing IRS warning letters, intense red backlighting",
+    "personal_finance": "vibrant emerald green money raining down, electric blue financial charts glowing",
+    "real_estate": "stunning house exterior with fiery sunset, vivid orange coral and golden tones",
+    "career": "dynamic office boardroom with bold purple neon and electric yellow highlights",
+    "ai_tech": "glowing neon cyan circuit patterns exploding outward, deep violet background",
+    "health": "urgent medical scene with bright red warning lights and vivid teal contrast",
 }
+
+# Bold font paths searched in order (macOS, then Ubuntu)
+_FONT_PATHS = [
+    "/System/Library/Fonts/Supplemental/Impact.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+]
+
+
+def _find_font(size: int) -> ImageFont.FreeTypeFont:
+    for path in _FONT_PATHS:
+        try:
+            return ImageFont.truetype(path, size)
+        except (OSError, IOError):
+            continue
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
+def _wrap_text(title: str, font: ImageFont.FreeTypeFont, max_width: int, draw: ImageDraw.ImageDraw) -> list:
+    words = title.split()
+    lines: list = []
+    current: list = []
+    for word in words:
+        test = " ".join(current + [word])
+        bb = draw.textbbox((0, 0), test, font=font)
+        if bb[2] - bb[0] <= max_width:
+            current.append(word)
+        else:
+            if current:
+                lines.append(" ".join(current))
+            current = [word]
+    if current:
+        lines.append(" ".join(current))
+    return lines or [title]
+
+
+def _overlay_text(img: Image.Image, title: str) -> Image.Image:
+    """Composite title text over the bottom 1/3 of the image using Pillow."""
+    w, h = img.size
+    zone_top = (h * 2) // 3
+
+    # Semi-transparent dark bar over bottom 1/3
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(overlay).rectangle([(0, zone_top), (w, h)], fill=(0, 0, 0, 185))
+    base = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+
+    draw = ImageDraw.Draw(base)
+    pad = int(w * 0.04)
+    max_w = w - 2 * pad
+    zone_h = h - zone_top
+
+    # Find the largest font size where text fits in ≤3 lines within 85% of zone height
+    line_h = gap = total_h = 0
+    lines: list = [title]
+    font = _find_font(20)
+    for font_size in range(90 if w >= 1000 else 52, 18, -4):
+        font = _find_font(font_size)
+        lines = _wrap_text(title, font, max_w, draw)
+        if len(lines) > 3:
+            continue
+        sample_bb = draw.textbbox((0, 0), "Ag", font=font)
+        line_h = sample_bb[3] - sample_bb[1]
+        gap = max(4, font_size // 8)
+        total_h = line_h * len(lines) + gap * (len(lines) - 1)
+        if total_h <= int(zone_h * 0.85):
+            break
+
+    # Center text block vertically in the zone, each line centered horizontally
+    y = zone_top + (zone_h - total_h) // 2
+    shadow_off = max(2, font_size // 20)
+    for line in lines:
+        bb = draw.textbbox((0, 0), line, font=font)
+        x = (w - (bb[2] - bb[0])) // 2
+        draw.text((x + shadow_off, y + shadow_off), line, font=font, fill=(0, 0, 0))
+        draw.text((x, y), line, font=font, fill=(255, 255, 255))
+        y += line_h + gap
+
+    return base
 
 
 def _fit_crop(img: Image.Image, w: int, h: int) -> Image.Image:
@@ -39,12 +122,14 @@ def _fit_crop(img: Image.Image, w: int, h: int) -> Image.Image:
 
 
 def _build_replicate_prompt(title: str, category: str, is_short: bool) -> str:
-    style = _CATEGORY_STYLE.get(category, "dramatic background, bright accents")
+    style = _CATEGORY_STYLE.get(category, "dramatic background, ultra-vivid bright accents")
     orientation = "vertical 9:16" if is_short else "horizontal 16:9"
     return (
-        f"YouTube thumbnail, {orientation}, bold white text reading '{title}', "
-        f"shocked or alarmed person reacting, {style}, "
-        f"cinematic dramatic lighting, high contrast, scroll-stopping, photorealistic"
+        f"YouTube thumbnail background, {orientation}, "
+        f"shocked or alarmed person with wide eyes and open mouth reacting dramatically, "
+        f"{style}, ultra-vivid saturated colors, cinematic dramatic lighting, "
+        f"high contrast, electric bold color palette, scroll-stopping visual impact, "
+        f"photorealistic, no text, no words, no captions, no letters"
     )
 
 
@@ -77,6 +162,7 @@ class ThumbnailGenerator:
         aspect_ratio = "9:16" if is_short else "16:9"
         img = self._replicate.generate_image(prompt, aspect_ratio)
         img = _fit_crop(img, w, h)
+        img = _overlay_text(img, title)
         out_path = self._output_dir / f"{output_stem}.jpg"
         img.save(str(out_path), "JPEG", quality=92)
         return out_path

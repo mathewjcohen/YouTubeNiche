@@ -1,5 +1,6 @@
 import hashlib
 import os
+import re
 import time
 import json
 from datetime import datetime, timezone, timedelta
@@ -15,6 +16,32 @@ from supabase import Client
 from agents.shared.gate_client import GateClient, GateNumber
 from agents.shared.db_retry import execute_with_retry, patch_postgrest_http1
 from agents.shared.article_fetcher import fetch_article_body
+
+
+MIN_BODY_CHARS = 200
+_DEDUP_WINDOW_DAYS = 14
+_DEDUP_THRESHOLD = 0.4
+
+_STOPWORDS = frozenset({
+    "a", "an", "the", "in", "on", "at", "to", "for", "of", "and", "or",
+    "but", "is", "are", "was", "were", "be", "been", "has", "have", "had",
+    "with", "from", "by", "this", "that", "it", "its", "he", "she", "they",
+    "we", "as", "not", "no", "new", "says", "say", "after", "how", "what",
+    "who", "why", "when", "where", "which", "about", "could", "would",
+    "should", "does", "did", "do", "up", "out", "over", "their", "into",
+    "than", "more", "also", "one", "two", "three", "first", "last", "just",
+})
+
+
+def _title_tokens(title: str) -> frozenset:
+    words = re.sub(r"[^a-z0-9 ]", " ", title.lower()).split()
+    return frozenset(w for w in words if w not in _STOPWORDS and len(w) > 2)
+
+
+def _jaccard(a: frozenset, b: frozenset) -> float:
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
 
 
 class NewsItem(BaseModel):
@@ -140,6 +167,20 @@ class NewsScraper:
 
         for niche in active_niches:
             keywords = self._keywords.get(niche.get("category", ""), [])
+
+            # Load recent topic titles for semantic dedup (scoped to this niche)
+            cutoff_iso = (datetime.now(timezone.utc) - timedelta(days=_DEDUP_WINDOW_DAYS)).isoformat()
+            recent_titles: List[str] = [
+                row["title"]
+                for row in execute_with_retry(
+                    self._sb.table("topics")
+                    .select("title")
+                    .eq("niche_id", niche["id"])
+                    .gte("created_at", cutoff_iso)
+                ).data
+                if row.get("title")
+            ]
+
             for keyword in keywords:
                 for adapter in self._adapters:
                     try:
@@ -154,6 +195,17 @@ class NewsScraper:
                                 print(f"[news] skipped (score {claude_score}): {item.title[:60]}")
                                 continue
                             body = fetch_article_body(item.url)
+                            if len(body) < MIN_BODY_CHARS:
+                                print(f"[news] skipped (thin body {len(body)} chars): {item.title[:60]}")
+                                continue
+                            new_tokens = _title_tokens(item.title)
+                            dup_match = next(
+                                (t for t in recent_titles if _jaccard(new_tokens, _title_tokens(t)) >= _DEDUP_THRESHOLD),
+                                None,
+                            )
+                            if dup_match:
+                                print(f"[news] skipped (duplicate of '{dup_match[:50]}'): {item.title[:60]}")
+                                continue
                             print(f"[news] fetched body ({len(body)} chars): {item.title[:50]}")
                             result = execute_with_retry(
                                 self._sb.table("topics").insert({
@@ -182,6 +234,7 @@ class NewsScraper:
                                 review_state="awaiting_review",
                             )
                             known_pairs.add(pair)
+                            recent_titles.append(item.title)
                     except Exception as e:
                         print(f"[news] adapter error for '{keyword}': {e}")
 

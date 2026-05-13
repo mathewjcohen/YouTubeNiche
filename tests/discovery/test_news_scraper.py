@@ -6,6 +6,8 @@ from unittest.mock import patch, MagicMock
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
+_GOOD_BODY = "x" * 300  # 300 chars — passes the MIN_BODY_CHARS=200 check
+
 
 def test_google_news_adapter_parses_fixture():
     import feedparser
@@ -47,7 +49,6 @@ def test_newsapi_adapter_parses_fixture():
 
 def test_news_scraper_raises_on_zero_articles():
     from agents.discovery.news_scraper import NewsScraper
-    from datetime import datetime, timezone
 
     failing_adapter = MagicMock()
     failing_adapter.fetch.return_value = []
@@ -55,7 +56,8 @@ def test_news_scraper_raises_on_zero_articles():
     with patch("agents.discovery.news_scraper.execute_with_retry") as mock_db:
         mock_db.side_effect = [
             MagicMock(data=[{"id": "niche-1", "category": "legal", "name": "Legal Advice"}]),
-            MagicMock(data=[]),
+            MagicMock(data=[]),   # known_pairs
+            MagicMock(data=[]),   # recent_titles for niche-1
         ]
         scraper = NewsScraper(
             supabase=MagicMock(),
@@ -85,9 +87,10 @@ def test_news_scraper_inserts_high_scoring_topics():
     with patch("agents.discovery.news_scraper.execute_with_retry") as mock_db:
         mock_db.side_effect = [
             MagicMock(data=[{"id": "niche-1", "category": "legal", "name": "Legal Advice"}]),
-            MagicMock(data=[]),
-            MagicMock(data=[{"id": "topic-new"}]),
-            MagicMock(data=[{}]),
+            MagicMock(data=[]),   # known_pairs
+            MagicMock(data=[]),   # recent_titles for niche-1
+            MagicMock(data=[{"id": "topic-new"}]),  # insert
+            MagicMock(data=[{}]),                   # app_settings upsert
         ]
         scraper = NewsScraper(
             supabase=MagicMock(),
@@ -96,7 +99,111 @@ def test_news_scraper_inserts_high_scoring_topics():
             news_keywords={"legal": ["lawsuit settlement"]},
         )
         with patch.object(scraper, "_score_item", return_value=8.0):
-            scraper.run()
+            with patch("agents.discovery.news_scraper.fetch_article_body", return_value=_GOOD_BODY):
+                scraper.run()
 
-    # Verify at least 3 DB calls: niches, known_pairs, insert
-    assert mock_db.call_count >= 3
+    # niches, known_pairs, recent_titles, insert, app_settings upsert
+    assert mock_db.call_count >= 4
+
+
+def test_news_scraper_skips_thin_body():
+    from agents.discovery.news_scraper import NewsScraper, NewsItem
+    from datetime import datetime, timezone
+
+    item = NewsItem(
+        source_type="google_news",
+        source_id="abc999",
+        title="Story with no article body",
+        url="https://example.com/paywalled",
+        published_at=datetime(2025, 5, 7, 10, 0, tzinfo=timezone.utc),
+        keywords_matched=["lawsuit"],
+    )
+    mock_adapter = MagicMock()
+    mock_adapter.fetch.return_value = [item]
+
+    with patch("agents.discovery.news_scraper.execute_with_retry") as mock_db:
+        mock_db.side_effect = [
+            MagicMock(data=[{"id": "niche-1", "category": "legal", "name": "Legal Advice"}]),
+            MagicMock(data=[]),   # known_pairs
+            MagicMock(data=[]),   # recent_titles
+            MagicMock(data=[{}]), # app_settings upsert
+        ]
+        scraper = NewsScraper(
+            supabase=MagicMock(),
+            gate_client=MagicMock(),
+            adapters=[mock_adapter],
+            news_keywords={"legal": ["lawsuit"]},
+        )
+        with patch.object(scraper, "_score_item", return_value=8.0):
+            with patch("agents.discovery.news_scraper.fetch_article_body", return_value="Too short"):
+                scraper.run()
+
+    # No insert should have happened — call count stays at niches+known+recent+upsert
+    call_tables = [str(c) for c in mock_db.call_args_list]
+    assert not any("insert" in t.lower() for t in call_tables)
+
+
+def test_news_scraper_deduplicates_similar_titles():
+    from agents.discovery.news_scraper import NewsScraper, NewsItem
+    from datetime import datetime, timezone
+
+    existing_title = "Hantavirus Outbreak on Cruise Ship"
+    duplicate_title = "Cruise Ship Hantavirus Cases Rising"
+
+    item = NewsItem(
+        source_type="google_news",
+        source_id="dup999",
+        title=duplicate_title,
+        url="https://example.com/dup-story",
+        published_at=datetime(2025, 5, 8, 10, 0, tzinfo=timezone.utc),
+        keywords_matched=["hantavirus"],
+    )
+    mock_adapter = MagicMock()
+    mock_adapter.fetch.return_value = [item]
+
+    with patch("agents.discovery.news_scraper.execute_with_retry") as mock_db:
+        mock_db.side_effect = [
+            MagicMock(data=[{"id": "niche-1", "category": "health", "name": "Health"}]),
+            MagicMock(data=[]),                            # known_pairs
+            MagicMock(data=[{"title": existing_title}]),   # recent_titles — has the original story
+            MagicMock(data=[{}]),                          # app_settings upsert
+        ]
+        scraper = NewsScraper(
+            supabase=MagicMock(),
+            gate_client=MagicMock(),
+            adapters=[mock_adapter],
+            news_keywords={"health": ["hantavirus"]},
+        )
+        with patch.object(scraper, "_score_item", return_value=8.0):
+            with patch("agents.discovery.news_scraper.fetch_article_body", return_value=_GOOD_BODY):
+                scraper.run()
+
+    # No insert — the duplicate was rejected
+    call_tables = [str(c) for c in mock_db.call_args_list]
+    assert not any("insert" in t.lower() for t in call_tables)
+
+
+def test_title_tokens_filters_stopwords():
+    from agents.discovery.news_scraper import _title_tokens
+
+    tokens = _title_tokens("A family in Texas was sued for the first time")
+    assert "family" in tokens
+    assert "texas" in tokens
+    assert "sued" in tokens
+    # stopwords stripped
+    assert "a" not in tokens
+    assert "in" not in tokens
+    assert "the" not in tokens
+    assert "for" not in tokens
+
+
+def test_jaccard_dedup_threshold():
+    from agents.discovery.news_scraper import _title_tokens, _jaccard, _DEDUP_THRESHOLD
+
+    a = _title_tokens("Hantavirus Outbreak on Cruise Ship")
+    b = _title_tokens("Cruise Ship Hantavirus Cases Rising")
+    assert _jaccard(a, b) >= _DEDUP_THRESHOLD
+
+    c = _title_tokens("Man sues Tesla over autopilot crash")
+    d = _title_tokens("Hurricane destroys beachfront homes in Florida")
+    assert _jaccard(c, d) < _DEDUP_THRESHOLD

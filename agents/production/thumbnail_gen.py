@@ -124,9 +124,12 @@ def _fit_crop(img: Image.Image, w: int, h: int) -> Image.Image:
 def _build_replicate_prompt(title: str, category: str, is_short: bool) -> str:
     style = _CATEGORY_STYLE.get(category, "dramatic background, ultra-vivid bright accents")
     orientation = "vertical 9:16" if is_short else "horizontal 16:9"
+    text_zone = "bottom quarter" if is_short else "bottom third"
     return (
         f"YouTube thumbnail background, {orientation}, "
         f"shocked or alarmed person with wide eyes and open mouth reacting dramatically, "
+        f"subject and main focal point positioned in upper two-thirds of frame, "
+        f"{text_zone} of image is darker and less visually complex to allow text overlay, "
         f"{style}, ultra-vivid saturated colors, cinematic dramatic lighting, "
         f"high contrast, electric bold color palette, scroll-stopping visual impact, "
         f"photorealistic, no text, no words, no captions, no letters"

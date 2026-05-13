@@ -63,12 +63,11 @@ class ShortDescriptionFixer:
                 print(f"[fixer] no token for niche {niche['name']} — skipping")
                 continue
 
-            # Fetch all uploaded videos for this niche
+            # Fetch all published videos for this niche
             all_videos = execute_with_retry(
-                self._sb.table("videos")
+                self._sb.table("published_videos")
                 .select("id, script_id, video_type, youtube_video_id")
                 .eq("niche_id", niche["id"])
-                .eq("status", "uploaded")
                 .not_.is_("youtube_video_id", "null")
             ).data
 

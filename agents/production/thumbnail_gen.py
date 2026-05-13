@@ -67,11 +67,7 @@ def _overlay_text(img: Image.Image, title: str) -> Image.Image:
     w, h = img.size
     zone_top = (h * 2) // 3
 
-    # Semi-transparent dark bar over bottom 1/3
-    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    ImageDraw.Draw(overlay).rectangle([(0, zone_top), (w, h)], fill=(0, 0, 0, 185))
-    base = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
-
+    base = img.copy()
     draw = ImageDraw.Draw(base)
     pad = int(w * 0.04)
     max_w = w - 2 * pad
@@ -93,14 +89,13 @@ def _overlay_text(img: Image.Image, title: str) -> Image.Image:
         if total_h <= int(zone_h * 0.85):
             break
 
-    # Center text block vertically in the zone, each line centered horizontally
+    # White text with thick black stroke — no background bar needed
     y = zone_top + (zone_h - total_h) // 2
-    shadow_off = max(2, font_size // 20)
+    stroke_w = max(2, font_size // 18)
     for line in lines:
         bb = draw.textbbox((0, 0), line, font=font)
         x = (w - (bb[2] - bb[0])) // 2
-        draw.text((x + shadow_off, y + shadow_off), line, font=font, fill=(0, 0, 0))
-        draw.text((x, y), line, font=font, fill=(255, 255, 255))
+        draw.text((x, y), line, font=font, fill=(255, 255, 255), stroke_width=stroke_w, stroke_fill=(0, 0, 0))
         y += line_h + gap
 
     return base
@@ -124,12 +119,10 @@ def _fit_crop(img: Image.Image, w: int, h: int) -> Image.Image:
 def _build_replicate_prompt(title: str, category: str, is_short: bool) -> str:
     style = _CATEGORY_STYLE.get(category, "dramatic background, ultra-vivid bright accents")
     orientation = "vertical 9:16" if is_short else "horizontal 16:9"
-    text_zone = "bottom quarter" if is_short else "bottom third"
     return (
         f"YouTube thumbnail background, {orientation}, "
         f"shocked or alarmed person with wide eyes and open mouth reacting dramatically, "
         f"subject and main focal point positioned in upper two-thirds of frame, "
-        f"{text_zone} of image is darker and less visually complex to allow text overlay, "
         f"{style}, ultra-vivid saturated colors, cinematic dramatic lighting, "
         f"high contrast, electric bold color palette, scroll-stopping visual impact, "
         f"photorealistic, no text, no words, no captions, no letters"

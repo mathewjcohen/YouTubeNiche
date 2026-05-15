@@ -73,10 +73,20 @@ def _overlay_text(img: Image.Image, title: str) -> Image.Image:
     max_w = w - 2 * pad
     zone_h = h - zone_top
 
-    # Find the largest font size where text fits in ≤3 lines within 85% of zone height
-    line_h = gap = total_h = 0
-    lines: list = [title]
-    font = _find_font(20)
+    # Seed chosen_* with the smallest font so there's always a valid fallback
+    _seed_font = _find_font(22)
+    _seed_lines = _wrap_text(title, _seed_font, max_w, draw)
+    _seed_bb = draw.textbbox((0, 0), "Ag", font=_seed_font)
+    _seed_lh = _seed_bb[3] - _seed_bb[1]
+    chosen_font = _seed_font
+    chosen_font_size = 22
+    chosen_lines = _seed_lines
+    chosen_line_h = _seed_lh
+    chosen_gap = 4
+    chosen_total_h = _seed_lh * len(_seed_lines) + 4 * (len(_seed_lines) - 1)
+
+    # Find the largest font where text fits in ≤3 lines within 85% of the zone.
+    # chosen_* is updated on every valid iteration so lines and metrics always match.
     for font_size in range(90 if w >= 1000 else 52, 18, -4):
         font = _find_font(font_size)
         lines = _wrap_text(title, font, max_w, draw)
@@ -86,17 +96,19 @@ def _overlay_text(img: Image.Image, title: str) -> Image.Image:
         line_h = sample_bb[3] - sample_bb[1]
         gap = max(4, font_size // 8)
         total_h = line_h * len(lines) + gap * (len(lines) - 1)
+        chosen_font, chosen_font_size = font, font_size
+        chosen_lines, chosen_line_h, chosen_gap, chosen_total_h = lines, line_h, gap, total_h
         if total_h <= int(zone_h * 0.85):
             break
 
-    # White text with thick black stroke — no background bar needed
-    y = zone_top + (zone_h - total_h) // 2
-    stroke_w = max(2, font_size // 18)
-    for line in lines:
-        bb = draw.textbbox((0, 0), line, font=font)
+    # Clamp y so text never drifts above the zone even if total_h > zone_h
+    y = max(zone_top, zone_top + (zone_h - chosen_total_h) // 2)
+    stroke_w = max(2, chosen_font_size // 18)
+    for line in chosen_lines:
+        bb = draw.textbbox((0, 0), line, font=chosen_font)
         x = (w - (bb[2] - bb[0])) // 2
-        draw.text((x, y), line, font=font, fill=(255, 255, 255), stroke_width=stroke_w, stroke_fill=(0, 0, 0))
-        y += line_h + gap
+        draw.text((x, y), line, font=chosen_font, fill=(255, 255, 255), stroke_width=stroke_w, stroke_fill=(0, 0, 0))
+        y += chosen_line_h + chosen_gap
 
     return base
 

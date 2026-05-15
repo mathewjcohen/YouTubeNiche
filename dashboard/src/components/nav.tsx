@@ -6,14 +6,12 @@ async function getPendingCounts(): Promise<PendingCounts> {
   const supabase = await createClient()
 
   const [
-    { count: gate1 },
     { count: gate2 },
     { count: gate3 },
     { count: gate4 },
     { count: gate5 },
     { count: gate6 },
   ] = await Promise.all([
-    supabase.from('niches').select('*', { count: 'exact', head: true }).eq('gate1_state', 'awaiting_review'),
     supabase.from('topics').select('*', { count: 'exact', head: true }).eq('gate2_state', 'awaiting_review'),
     supabase.from('scripts').select('*', { count: 'exact', head: true }).eq('gate3_state', 'awaiting_review'),
     supabase.from('videos').select('*', { count: 'exact', head: true }).eq('gate4_state', 'awaiting_review'),
@@ -22,7 +20,6 @@ async function getPendingCounts(): Promise<PendingCounts> {
   ])
 
   return {
-    gate1: gate1 ?? 0,
     gate2: gate2 ?? 0,
     gate3: gate3 ?? 0,
     gate4: gate4 ?? 0,

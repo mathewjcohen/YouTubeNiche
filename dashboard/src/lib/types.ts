@@ -139,7 +139,6 @@ export interface VideoAnalytics {
 }
 
 export interface PendingCounts {
-  gate1: number
   gate2: number
   gate3: number
   gate4: number

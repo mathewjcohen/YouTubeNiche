@@ -182,9 +182,10 @@ class ThumbnailGenerator:
         # Inner join: only scripts that have at least one video row
         scripts = (
             self._sb.table("scripts")
-            .select("*, niches(category), videos!inner(id, video_type, gate5_state)")
+            .select("id, youtube_title, niche_id, niches(category), videos!inner(id, video_type, gate5_state)")
             .eq("niche_id", niche_id)
             .eq("gate3_state", "approved")
+            .neq("status", "done")
             .execute()
             .data
         )

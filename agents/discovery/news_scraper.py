@@ -190,7 +190,7 @@ class NewsScraper:
                             pair = (item.source_type, item.source_id)
                             if pair in known_pairs:
                                 continue
-                            claude_score = self._score_item(item)
+                            claude_score = self._score_item(item, niche.get("category", ""), niche.get("name", ""))
                             if claude_score < 6:
                                 print(f"[news] skipped (score {claude_score}): {item.title[:60]}")
                                 continue
@@ -252,14 +252,22 @@ class NewsScraper:
         )
         print(f"[news] done. total articles fetched: {total_fetched}")
 
-    def _score_item(self, item: NewsItem) -> float:
+    def _score_item(self, item: NewsItem, niche_category: str = "", niche_name: str = "") -> float:
         from agents.shared.anthropic_client import complete
+        niche_line = f"Channel niche: {niche_name} ({niche_category})\n" if niche_category else ""
         prompt = (
-            "Rate this news article for YouTube video potential. Score 1-10:\n"
-            "- Clear story with conflict/resolution or surprising outcome\n"
-            "- General audience appeal, not just insiders\n"
+            f"Rate this news article for YouTube video potential on a channel about real-world stories, "
+            f"mistakes, and lessons learned from others' experiences.\n"
+            f"{niche_line}"
+            "Score 1-10 where:\n"
+            "- 8-10: Directly relevant, compelling story with conflict/resolution or surprising outcome\n"
+            "- 5-7: Tangentially related or decent but unremarkable story\n"
+            "- 1-4: Off-topic for this channel or not suitable for YouTube storytelling\n\n"
+            "Criteria:\n"
+            "- Must relate to real people dealing with real consequences (legal, financial, health, etc.)\n"
+            "- General audience appeal, not industry insider content\n"
             "- Enough detail to sustain a 10-12 minute video\n"
-            "- Relevant now but not purely breaking news\n\n"
+            "- Unrelated topics (tech trends, politics, celebrity gossip) score 1-3\n\n"
             f"Title: {item.title}\n\n"
             "Return only the integer score."
         )

@@ -27,7 +27,7 @@ function groupByNiche(topics: TopicRow[]): NicheGroup[] {
 export default async function TopicsPage() {
   const supabase = await createClient()
   const [{ data: topics }, { data: appSettings }] = await Promise.all([
-    supabase.from('topics').select('*, niches(name)').eq('gate2_state', 'awaiting_review').order('claude_score', { ascending: false }),
+    supabase.from('topics').select('*, niches(name)').eq('gate2_state', 'awaiting_review').order('claude_score', { ascending: false }).order('id', { ascending: true }),
     supabase.from('app_settings').select('key, value').eq('key', 'topic_runner_enabled'),
   ])
 

@@ -1,10 +1,22 @@
 {
-  "legal": ["legaladvice", "law", "bestoflegaladvice"],
-  "insurance": ["Insurance", "HealthInsurance", "legaladvice"],
-  "tax": ["personalfinance", "tax", "IRS"],
-  "personal_finance": ["personalfinance", "povertyfinance", "FinancialPlanning"],
-  "real_estate": ["RealEstate", "FirstTimeHomeBuyer", "Landlord"],
-  "career": ["careeradvice", "jobs", "AskHR", "negotiation"],
-  "ai_tech": ["artificial", "ChatGPT", "singularity", "MachineLearning"],
-  "health": ["AskDocs", "HealthInsurance", "medical"]
+  "general": [
+    "legaladvice",
+    "bestoflegaladvice",
+    "Insurance",
+    "HealthInsurance",
+    "personalfinance",
+    "povertyfinance",
+    "tax",
+    "RealEstate",
+    "FirstTimeHomeBuyer",
+    "Landlord",
+    "careeradvice",
+    "AskHR",
+    "negotiation",
+    "AskDocs",
+    "medical",
+    "tifu",
+    "AmItheAsshole",
+    "MaliciousCompliance"
+  ]
 }

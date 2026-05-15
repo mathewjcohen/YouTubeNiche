@@ -12,14 +12,7 @@ THUMB_W, THUMB_H = 1280, 720          # long-form 16:9
 SHORT_W, SHORT_H = 1080, 1920         # shorts 9:16
 
 _CATEGORY_STYLE: dict[str, str] = {
-    "legal": "dramatic courtroom with a spotlight, rich gold and deep navy, law books and gavel",
-    "insurance": "stormy sky with lightning bolts, electric blue and vivid orange fire accents",
-    "tax": "explosive red and orange flames, glowing IRS warning letters, intense red backlighting",
-    "personal_finance": "vibrant emerald green money raining down, electric blue financial charts glowing",
-    "real_estate": "stunning house exterior with fiery sunset, vivid orange coral and golden tones",
-    "career": "dynamic office boardroom with bold purple neon and electric yellow highlights",
-    "ai_tech": "glowing neon cyan circuit patterns exploding outward, deep violet background",
-    "health": "urgent medical scene with bright red warning lights and vivid teal contrast",
+    "general": "dramatic scene with a shocked or alarmed person, bold split-tone lighting, deep shadows with vivid accent color — electric blue, fiery orange, or urgent red",
 }
 
 # Bold font paths searched in order (macOS, then Ubuntu)

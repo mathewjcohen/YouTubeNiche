@@ -6,7 +6,7 @@ export default async function ScriptsPage() {
   const supabase = await createClient()
   const { data: scripts } = await supabase
     .from('scripts')
-    .select('*, niches(name)')
+    .select('*')
     .eq('gate3_state', 'awaiting_review')
     .order('created_at')
 
@@ -19,7 +19,7 @@ export default async function ScriptsPage() {
       ) : (
         <div className="space-y-6">
           {scripts.map((s) => (
-            <ScriptReviewClient key={s.id} script={s as Script & { niches: { name: string } }} />
+            <ScriptReviewClient key={s.id} script={s as Script} />
           ))}
         </div>
       )}

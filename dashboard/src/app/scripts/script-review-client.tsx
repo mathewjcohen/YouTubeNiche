@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { approveScript, rejectScript, updateScript, deleteScript } from '@/app/actions/scripts'
 import type { Script } from '@/lib/types'
 
-export function ScriptReviewClient({ script }: { script: Script & { niches: { name: string } } }) {
+export function ScriptReviewClient({ script }: { script: Script }) {
   const [longForm, setLongForm] = useState(script.long_form_text)
   const [short, setShort] = useState(script.short_text)
   const [title, setTitle] = useState(script.youtube_title ?? '')
@@ -47,8 +47,7 @@ export function ScriptReviewClient({ script }: { script: Script & { niches: { na
   return (
     <div className={`bg-gray-800 border rounded-lg p-5 space-y-4 ${script.rejection_reason ? 'border-yellow-600/60' : 'border-gray-700'}`}>
       <div className="flex items-center gap-2">
-        <span className="font-semibold text-sm text-gray-100">{script.niches?.name}</span>
-        <span className="text-xs text-gray-500">{new Date(script.created_at).toLocaleDateString()}</span>
+        <span className="text-sm text-gray-400">{new Date(script.created_at).toLocaleDateString()}</span>
       </div>
 
       {script.rejection_reason && (

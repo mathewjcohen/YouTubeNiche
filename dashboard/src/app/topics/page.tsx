@@ -32,7 +32,7 @@ export default async function TopicsPage() {
   ])
 
   const rows = (topics ?? []) as TopicRow[]
-  const groups = groupByNiche(rows)
+  const groups = groupByNiche(rows).sort((a, b) => a.nicheName.localeCompare(b.nicheName))
   const topicRunnerEnabled = ((appSettings as { key: string; value: string }[] | null)?.find(s => s.key === 'topic_runner_enabled')?.value ?? 'true') === 'true'
 
   return (

@@ -54,8 +54,9 @@ export async function setPipelineEnabled(formData: FormData): Promise<void> {
 export async function setTopicRunnerEnabled(formData: FormData): Promise<void> {
   const enabled = formData.get('topic_runner_enabled') as string
   const supabase = await createClient()
-  await supabase
+  const { error } = await supabase
     .from('app_settings')
     .upsert({ key: 'topic_runner_enabled', value: enabled }, { onConflict: 'key' })
+  if (error) throw new Error(error.message)
   revalidatePath('/topics')
 }

@@ -34,3 +34,10 @@ test('setTopicRunnerEnabled saves true when value is true', async () => {
     { onConflict: 'key' }
   )
 })
+
+test('setTopicRunnerEnabled throws when upsert fails', async () => {
+  const fd = new FormData()
+  fd.set('topic_runner_enabled', 'true')
+  mockUpsert.mockResolvedValueOnce({ error: { message: 'Database error' } })
+  await expect(setTopicRunnerEnabled(fd)).rejects.toThrow('Database error')
+})

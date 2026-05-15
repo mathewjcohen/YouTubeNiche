@@ -22,22 +22,20 @@ function fmtNum(v: number | null | undefined): string {
 
 type SortKey = 'views' | 'avg_view_pct' | 'likes' | 'retention_50pct'
 
-export function VideoTable({ videos, nicheNames }: { videos: VideoRecord[]; nicheNames: string[] }) {
-  const [nicheFilter, setNicheFilter] = useState<string>('all')
+export function VideoTable({ videos }: { videos: VideoRecord[] }) {
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [sortKey, setSortKey] = useState<SortKey>('views')
   const [sortDesc, setSortDesc] = useState(true)
 
   const filtered = useMemo(() => {
     let rows = videos
-    if (nicheFilter !== 'all') rows = rows.filter((v) => v.niche_name === nicheFilter)
     if (typeFilter !== 'all') rows = rows.filter((v) => v.video_type === typeFilter)
     return [...rows].sort((a, b) => {
       const av = a[sortKey] ?? -1
       const bv = b[sortKey] ?? -1
       return sortDesc ? (bv as number) - (av as number) : (av as number) - (bv as number)
     })
-  }, [videos, nicheFilter, typeFilter, sortKey, sortDesc])
+  }, [videos, typeFilter, sortKey, sortDesc])
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -65,17 +63,6 @@ export function VideoTable({ videos, nicheNames }: { videos: VideoRecord[]; nich
     <div>
       {/* Filters */}
       <div className="flex items-center gap-3 mb-3 flex-wrap">
-        <select
-          value={nicheFilter}
-          onChange={(e) => setNicheFilter(e.target.value)}
-          className="bg-gray-800 border border-gray-600 text-gray-300 text-xs rounded px-2 py-1.5 cursor-pointer focus:outline-none focus:border-gray-500"
-        >
-          <option value="all">All niches</option>
-          {nicheNames.map((n) => (
-            <option key={n} value={n}>{n}</option>
-          ))}
-        </select>
-
         <div className="flex rounded overflow-hidden border border-gray-600">
           {(['all', 'long', 'short'] as const).map((t) => (
             <button
@@ -101,7 +88,6 @@ export function VideoTable({ videos, nicheNames }: { videos: VideoRecord[]; nich
           <thead>
             <tr className="text-gray-500 border-b border-gray-700">
               <th className="text-left pb-2 font-medium">Title</th>
-              <th className="text-left pb-2 font-medium">Niche</th>
               <th className="text-left pb-2 font-medium">Type</th>
               <th className="text-right pb-2 font-medium">Duration</th>
               <SortHeader label="Views" col="views" />
@@ -113,7 +99,7 @@ export function VideoTable({ videos, nicheNames }: { videos: VideoRecord[]; nich
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-6 text-center text-gray-600">No videos match the current filters.</td>
+                <td colSpan={7} className="py-6 text-center text-gray-600">No videos match the current filters.</td>
               </tr>
             ) : (
               filtered.map((v) => {
@@ -132,7 +118,6 @@ export function VideoTable({ videos, nicheNames }: { videos: VideoRecord[]; nich
                         {v.title}
                       </a>
                     </td>
-                    <td className="py-1.5 text-gray-400 max-w-[120px] truncate">{v.niche_name}</td>
                     <td className="py-1.5">
                       <span
                         className={`px-1.5 py-0.5 rounded text-xs font-medium ${

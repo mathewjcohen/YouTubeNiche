@@ -163,7 +163,6 @@ async function getHomeData() {
     })
     .sort((a, b) => b.views - a.views)
 
-  const videoNicheNames = [...new Set(videoRecords.map((v) => v.niche_name))].sort()
   const latestInsight = (latestInsightRows ?? [])[0] as Insight | undefined ?? null
 
   const countsForNiche = (nicheId: string) => {
@@ -192,7 +191,6 @@ async function getHomeData() {
     niches: (niches ?? []) as Niche[],
     countsForNiche,
     videoRecords,
-    videoNicheNames,
     latestInsight,
   }
 }
@@ -325,7 +323,7 @@ export default async function HomePage() {
           {data.videoRecords.length > 0 && (
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-5">
               <h2 className="font-semibold text-gray-100 mb-4">Video Performance</h2>
-              <VideoTable videos={data.videoRecords} nicheNames={data.videoNicheNames} />
+              <VideoTable videos={data.videoRecords} />
             </div>
           )}
         </div>

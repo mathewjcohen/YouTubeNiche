@@ -81,6 +81,7 @@ def test_process_approved_scripts_skips_render_for_shorts(tmp_path):
         .select.return_value
         .eq.return_value
         .eq.return_value
+        .neq.return_value
         .execute.return_value
         .data
     ) = [script_row]

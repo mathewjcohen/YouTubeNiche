@@ -7,7 +7,7 @@ from agents.shared.gate_client import GateClient, GateNumber
 from agents.shared.db_retry import execute_with_retry
 
 
-LONG_FORM_PROMPT = """You are writing a script for a faceless YouTube video in the {category} niche.
+LONG_FORM_PROMPT = """You are writing a script for a faceless YouTube channel about real-world stories — the mistakes, disputes, and hard lessons people learn about money, law, health, and work.
 
 Topic title: {title}
 Source story: {body}
@@ -26,7 +26,7 @@ CRITICAL: Output ONLY the spoken narration — no title, no section headers, no 
 no stage directions, no camera notes, no brackets or production metadata of any kind.
 Your response begins with the first spoken word of the narration and ends with the last."""
 
-LONG_FORM_PROMPT_NO_BODY = """You are writing a script for a faceless YouTube video in the {category} niche.
+LONG_FORM_PROMPT_NO_BODY = """You are writing a script for a faceless YouTube channel about real-world stories — the mistakes, disputes, and hard lessons people learn about money, law, health, and work.
 
 Topic: {title}
 
@@ -65,12 +65,10 @@ Your response begins with the first spoken word of the narration and ends with t
 METADATA_PROMPT = """Generate YouTube metadata for this video script.
 
 Script excerpt (first 500 chars): {excerpt}
-Niche: {niche_name}
-Category: {category}
 
 Return exactly three lines:
 Line 1: Title (under 70 chars, no clickbait, specific and curiosity-driven)
-Line 2: Description (2 sentences, include the word "{category}" naturally, end with "Like and subscribe for more.")
+Line 2: Description (2 sentences that summarize what happened and what the viewer will learn, end with "Like and subscribe for more.")
 Line 3: Tags (8 tags, comma-separated, no spaces around commas)"""
 
 DISCLAIMERS: dict[str, str] = {
@@ -157,12 +155,10 @@ class Scriptwriter:
             long_form_prompt = LONG_FORM_PROMPT.format(
                 title=topic_title,
                 body=topic_body[:3000],
-                category=niche_category,
             )
         else:
             long_form_prompt = LONG_FORM_PROMPT_NO_BODY.format(
                 title=topic_title,
-                category=niche_category,
             )
 
         long_form = _broll.sub('', complete_sonnet(long_form_prompt, max_tokens=3000)).strip()
@@ -172,11 +168,7 @@ class Scriptwriter:
             max_tokens=400,
         )).strip()
         meta_raw = complete_sonnet(
-            METADATA_PROMPT.format(
-                excerpt=long_form[:500],
-                niche_name=niche_name,
-                category=niche_category,
-            ),
+            METADATA_PROMPT.format(excerpt=long_form[:500]),
             max_tokens=300,
         )
         lines = [re.sub(r'^Line \d+:\s*', '', l.strip()) for l in meta_raw.strip().split("\n") if l.strip()]

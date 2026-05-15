@@ -274,6 +274,13 @@ def main() -> None:
     from supabase import create_client
     from agents.shared.config_loader import get_env
     sb = patch_postgrest_http1(create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY")))
+
+    enabled_rows = sb.table("app_settings").select("value").eq("key", "topic_runner_enabled").limit(1).execute().data
+    enabled = enabled_rows[0]["value"] if enabled_rows else "true"
+    if enabled == "false":
+        print("[news] paused via dashboard — exiting")
+        return
+
     gate = GateClient(sb)
     adapters: List = [GoogleNewsAdapter()]
     newsapi_key = os.getenv("NEWSAPI_KEY")

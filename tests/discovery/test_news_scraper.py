@@ -207,3 +207,29 @@ def test_jaccard_dedup_threshold():
     c = _title_tokens("Man sues Tesla over autopilot crash")
     d = _title_tokens("Hurricane destroys beachfront homes in Florida")
     assert _jaccard(c, d) < _DEDUP_THRESHOLD
+
+
+def test_main_exits_early_when_paused(capsys):
+    """main() should print a pause message and return without running the scraper."""
+    from agents.discovery.news_scraper import main
+
+    with patch("supabase.create_client") as mock_create, \
+         patch("agents.discovery.news_scraper.patch_postgrest_http1") as mock_patch, \
+         patch("agents.discovery.news_scraper.GateClient"), \
+         patch("agents.discovery.news_scraper.NewsScraper") as mock_scraper_cls, \
+         patch.dict("os.environ", {"SUPABASE_URL": "http://x", "SUPABASE_SERVICE_KEY": "key"}):
+
+        mock_sb = MagicMock()
+        mock_create.return_value = mock_sb
+        mock_patch.return_value = mock_sb
+
+        # Simulate app_settings returning topic_runner_enabled=false
+        mock_sb.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [
+            {"value": "false"}
+        ]
+
+        main()
+
+    mock_scraper_cls.return_value.run.assert_not_called()
+    captured = capsys.readouterr()
+    assert "paused" in captured.out

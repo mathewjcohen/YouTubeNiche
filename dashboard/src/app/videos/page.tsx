@@ -1,8 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import type { PublishedVideo, PublishedVideoStatus } from '@/lib/types'
 
-type Row = PublishedVideo & { niches: { name: string } }
-
 function StatusBadge({ status }: { status: PublishedVideoStatus }) {
   const styles: Record<PublishedVideoStatus, string> = {
     live: 'bg-green-100 text-green-800',
@@ -42,10 +40,10 @@ export default async function VideosPage() {
 
   const { data: rows } = await supabase
     .from('published_videos')
-    .select('*, niches(name)')
+    .select('*')
     .order('uploaded_at', { ascending: false })
 
-  const videos = (rows ?? []) as Row[]
+  const videos = (rows ?? []) as PublishedVideo[]
 
   const live = videos.filter((v) => v.status === 'live').length
   const removed = videos.filter((v) => v.status === 'removed').length
@@ -82,7 +80,6 @@ export default async function VideosPage() {
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Title</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Niche</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Duration</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Uploaded</th>
@@ -96,7 +93,6 @@ export default async function VideosPage() {
                 <td className="px-4 py-3 max-w-xs">
                   <span className="line-clamp-2 text-gray-900">{v.title ?? v.youtube_video_id}</span>
                 </td>
-                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{v.niches?.name ?? '—'}</td>
                 <td className="px-4 py-3"><TypeBadge type={v.video_type} /></td>
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fmtDur(v.duration_sec)}</td>
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fmtDate(v.uploaded_at)}</td>

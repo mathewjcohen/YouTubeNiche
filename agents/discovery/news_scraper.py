@@ -276,7 +276,7 @@ def main() -> None:
     sb = patch_postgrest_http1(create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY")))
 
     enabled_rows = sb.table("app_settings").select("value").eq("key", "topic_runner_enabled").limit(1).execute().data
-    enabled = enabled_rows[0]["value"] if enabled_rows else "true"
+    enabled = enabled_rows[0].get("value", "true") if enabled_rows else "true"
     if enabled == "false":
         print("[news] paused via dashboard — exiting")
         return

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { approveTopic, rejectTopic, approveTopBatch, approveTopBatchPerNiche } from '@/app/actions/topics'
+import { setTopicRunnerEnabled } from '@/app/actions/settings'
 import { Form, SubmitButton } from '@/components/form'
 import { Collapsible } from '@/components/collapsible'
 import type { Topic } from '@/lib/types'
@@ -25,51 +26,69 @@ function groupByNiche(topics: TopicRow[]): NicheGroup[] {
 
 export default async function TopicsPage() {
   const supabase = await createClient()
-  const { data: topics } = await supabase
-    .from('topics')
-    .select('*, niches(name)')
-    .eq('gate2_state', 'awaiting_review')
-    .order('claude_score', { ascending: false })
+  const [{ data: topics }, { data: appSettings }] = await Promise.all([
+    supabase.from('topics').select('*, niches(name)').eq('gate2_state', 'awaiting_review').order('claude_score', { ascending: false }),
+    supabase.from('app_settings').select('key, value').eq('key', 'topic_runner_enabled'),
+  ])
 
   const rows = (topics ?? []) as TopicRow[]
   const groups = groupByNiche(rows)
+  const topicRunnerEnabled = ((appSettings as { key: string; value: string }[] | null)?.find(s => s.key === 'topic_runner_enabled')?.value ?? 'true') === 'true'
 
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h1 className="text-2xl font-bold">Topic Queue</h1>
-        {rows.length > 0 && (
-          <div className="flex flex-col gap-1.5 items-end">
-            <Form action={approveTopBatch} successMessage="Batch approved" className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 w-24 text-right">Top across all</span>
-              <input
-                name="count"
-                type="number"
-                min={1}
-                max={20}
-                defaultValue={3}
-                className="w-14 border border-gray-600 bg-gray-700 text-gray-100 rounded px-2 py-1 text-xs text-center"
-              />
-              <SubmitButton className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700 whitespace-nowrap w-24">
-                Approve
-              </SubmitButton>
-            </Form>
-            <Form action={approveTopBatchPerNiche} successMessage="Per-niche batch approved" className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 w-24 text-right">Top per niche</span>
-              <input
-                name="count"
-                type="number"
-                min={1}
-                max={20}
-                defaultValue={3}
-                className="w-14 border border-gray-600 bg-gray-700 text-gray-100 rounded px-2 py-1 text-xs text-center"
-              />
-              <SubmitButton className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700 whitespace-nowrap w-24">
-                Approve
-              </SubmitButton>
-            </Form>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold">Topic Queue</h1>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded ${topicRunnerEnabled ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+            {topicRunnerEnabled ? 'Running' : 'Paused'}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <Form
+            action={setTopicRunnerEnabled}
+            successMessage={topicRunnerEnabled ? 'Topic runner paused' : 'Topic runner resumed'}
+          >
+            <input type="hidden" name="topic_runner_enabled" value={topicRunnerEnabled ? 'false' : 'true'} />
+            <SubmitButton
+              className={`text-xs px-3 py-1.5 rounded ${topicRunnerEnabled ? 'bg-red-700 hover:bg-red-600 text-white' : 'bg-green-700 hover:bg-green-600 text-white'}`}
+            >
+              {topicRunnerEnabled ? 'Pause Topic Runner' : 'Resume Topic Runner'}
+            </SubmitButton>
+          </Form>
+          {rows.length > 0 && (
+            <div className="flex flex-col gap-1.5 items-end">
+              <Form action={approveTopBatch} successMessage="Batch approved" className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 w-24 text-right">Top across all</span>
+                <input
+                  name="count"
+                  type="number"
+                  min={1}
+                  max={20}
+                  defaultValue={3}
+                  className="w-14 border border-gray-600 bg-gray-700 text-gray-100 rounded px-2 py-1 text-xs text-center"
+                />
+                <SubmitButton className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700 whitespace-nowrap w-24">
+                  Approve
+                </SubmitButton>
+              </Form>
+              <Form action={approveTopBatchPerNiche} successMessage="Per-niche batch approved" className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 w-24 text-right">Top per niche</span>
+                <input
+                  name="count"
+                  type="number"
+                  min={1}
+                  max={20}
+                  defaultValue={3}
+                  className="w-14 border border-gray-600 bg-gray-700 text-gray-100 rounded px-2 py-1 text-xs text-center"
+                />
+                <SubmitButton className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700 whitespace-nowrap w-24">
+                  Approve
+                </SubmitButton>
+              </Form>
+            </div>
+          )}
+        </div>
       </div>
       <p className="text-sm text-gray-500 mb-6">Gate 2 — {rows.length} awaiting review</p>
 

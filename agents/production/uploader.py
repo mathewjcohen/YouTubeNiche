@@ -338,7 +338,12 @@ class YouTubeUploader:
                     is_short=video["video_type"] == "short",
                 )
 
-                if video["video_type"] == "long":
+                vtype = video["video_type"]
+                yt_url = f"https://www.youtube.com/{'shorts' if vtype == 'short' else 'watch'}?v={yt_id}"
+                print(f"[uploader] ✅ UPLOADED TO YOUTUBE ({vtype}): {script['youtube_title']}")
+                print(f"[uploader]    {yt_url}")
+
+                if vtype == "long":
                     long_yt_ids[video["script_id"]] = yt_id
 
                 execute_with_retry(
@@ -365,7 +370,6 @@ class YouTubeUploader:
                     print(f"[uploader] script {video['script_id'][:8]} marked done")
                 self._delete_s3_video(video["video_path"])
                 self._delete_supabase_assets(video)
-                print(f"[uploader] uploaded {yt_id} ({video['video_type']})")
             except Exception as e:
                 try:
                     execute_with_retry(

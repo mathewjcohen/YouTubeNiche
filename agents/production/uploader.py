@@ -380,3 +380,90 @@ class YouTubeUploader:
                 print(f"[uploader] failed for video {video['id']}: {e}")
                 if _is_quota_exceeded(e):
                     raise
+
+        if video_type_filter:
+            return
+
+        # Second pass: upload shorts whose long was already published (possibly in a prior run)
+        orphan_shorts = execute_with_retry(
+            self._sb.table("videos")
+            .select("*, scripts(youtube_title, youtube_description, youtube_tags)")
+            .eq("niche_id", niche_id)
+            .eq("gate6_state", "approved")
+            .eq("status", "approved")
+            .eq("video_type", "short")
+            .limit(VIDEOS_PER_RUN)
+        ).data
+
+        for video in orphan_shorts:
+            script = video.get("scripts")
+            if not script:
+                continue
+            long_yt_id = self._get_long_yt_id(video["script_id"])
+            if not long_yt_id:
+                continue  # long not yet published — will be paired in a future run
+
+            claimed = execute_with_retry(
+                self._sb.table("videos")
+                .update({"status": "uploading"})
+                .eq("id", video["id"])
+                .eq("status", "approved")
+            ).data
+            if not claimed:
+                continue
+
+            try:
+                description = script["youtube_description"] or ""
+                link_line = f"Watch the full video: https://www.youtube.com/watch?v={long_yt_id}"
+                if "\n\n⚠️ DISCLAIMER:" in description:
+                    pre, post = description.split("\n\n⚠️ DISCLAIMER:", 1)
+                    description = pre.rstrip() + f"\n\n{link_line}\n\n⚠️ DISCLAIMER:" + post
+                else:
+                    description = description.rstrip() + f"\n\n{link_line}"
+
+                yt_id = self.upload(
+                    video_path=video["video_path"],
+                    thumbnail_path=video["thumbnail_path"],
+                    title=script["youtube_title"],
+                    description=description,
+                    tags=script.get("youtube_tags", []),
+                    is_short=True,
+                )
+                yt_url = f"https://www.youtube.com/shorts/{yt_id}"
+                print(f"[uploader] ✅ UPLOADED TO YOUTUBE (short, orphan): {script['youtube_title']}")
+                print(f"[uploader]    {yt_url}")
+
+                execute_with_retry(
+                    self._sb.table("videos").update({"status": "uploaded"}).eq("id", video["id"])
+                )
+                execute_with_retry(
+                    self._sb.table("published_videos").insert({
+                        "niche_id": niche_id,
+                        "script_id": video["script_id"],
+                        "youtube_video_id": yt_id,
+                        "video_type": "short",
+                    })
+                )
+                execute_with_retry(
+                    self._sb.table("videos").delete().eq("id", video["id"])
+                )
+                remaining = execute_with_retry(
+                    self._sb.table("videos").select("id").eq("script_id", video["script_id"])
+                ).data
+                if not remaining:
+                    execute_with_retry(
+                        self._sb.table("scripts").update({"status": "done"}).eq("id", video["script_id"])
+                    )
+                    print(f"[uploader] script {video['script_id'][:8]} marked done")
+                self._delete_s3_video(video["video_path"])
+                self._delete_supabase_assets(video)
+            except Exception as e:
+                try:
+                    execute_with_retry(
+                        self._sb.table("videos").update({"status": "approved"}).eq("id", video["id"])
+                    )
+                except Exception:
+                    pass
+                print(f"[uploader] failed for orphan short {video['id']}: {e}")
+                if _is_quota_exceeded(e):
+                    raise

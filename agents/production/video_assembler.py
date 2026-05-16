@@ -19,6 +19,7 @@ from moviepy.editor import (
 from supabase import Client
 from agents.shared.gate_client import GateClient, GateNumber
 from agents.shared.db_retry import execute_with_retry
+from agents.shared.tlog import tlog
 
 
 BROLL_PATTERN = re.compile(r"\[B-ROLL:\s*(.+?)\]", re.IGNORECASE)
@@ -144,7 +145,7 @@ class VideoAssembler:
                         cropped = scaled.crop(x_center=scaled.w / 2, y_center=scaled.h / 2, width=target_w, height=target_h)
                         pool.append(cropped)
                     except Exception as exc:
-                        print(f"[assembler] clip {i}_{j} download failed: {exc}")
+                        tlog(f"[assembler] clip {i}_{j} download failed: {exc}")
 
             if not pool:
                 pool = [ColorClip(size=(target_w, target_h), color=(0, 0, 0), duration=5)]
@@ -167,7 +168,7 @@ class VideoAssembler:
             video = video.set_audio(audio)
 
             out_path = self._output_dir / f"{output_stem}.mp4"
-            print(f"[assembler] encoding {output_stem} ({total_duration:.1f}s audio, {len(pool)} clips cycling)…")
+            tlog(f"[assembler] encoding {output_stem} ({total_duration:.1f}s audio, {len(pool)} clips cycling)…")
             video.write_videofile(
                 str(out_path),
                 fps=self.FPS,
@@ -177,9 +178,9 @@ class VideoAssembler:
                 remove_temp=True,
                 logger=None,
             )
-            print(f"[assembler] encode complete → {out_path}")
+            tlog(f"[assembler] encode complete → {out_path}")
 
-        print(f"[assembler] uploading {out_path.name}…")
+        tlog(f"[assembler] uploading {out_path.name}…")
         return self._upload_video(out_path, out_path.name)
 
     def _delete_voiceover_assets(self, video: dict) -> None:
@@ -193,9 +194,9 @@ class VideoAssembler:
                 bucket = get_env("AWS_S3_BUCKET")
                 region = get_env("REMOTION_REGION")
                 boto3.client("s3", region_name=region).delete_object(Bucket=bucket, Key=key)
-                print(f"[assembler] deleted s3://{bucket}/{key}")
+                tlog(f"[assembler] deleted s3://{bucket}/{key}")
             except Exception as exc:
-                print(f"[assembler] s3 audio cleanup failed (non-fatal): {exc}")
+                tlog(f"[assembler] s3 audio cleanup failed (non-fatal): {exc}")
 
     def _query_pending_videos(self, niche_id: str, video_type: str) -> list:
         return execute_with_retry(
@@ -215,7 +216,7 @@ class VideoAssembler:
             try:
                 scripts_data = video.get("scripts")
                 if not scripts_data:
-                    print(f"[assembler] video {video['id']} has no linked script, skip")
+                    tlog(f"[assembler] video {video['id']} has no linked script, skip")
                     continue
                 script_text = (
                     scripts_data["long_form_text"]
@@ -240,15 +241,15 @@ class VideoAssembler:
                         "gate6_state": gate6_state,
                     }).eq("id", video["id"])
                 )
-                print(f"[assembler] video {video['id']} assembled → {out_path} (gate6={gate6_state})")
+                tlog(f"[assembler] video {video['id']} assembled → {out_path} (gate6={gate6_state})")
                 self._delete_voiceover_assets(video)
             except botocore.exceptions.ClientError as exc:
                 code = exc.response.get("Error", {}).get("Code", "")
                 if code in ("404", "NoSuchKey"):
-                    print(f"[assembler] video {video['id']} audio permanently missing (S3 404) — marking assembly_failed")
+                    tlog(f"[assembler] video {video['id']} audio permanently missing (S3 404) — marking assembly_failed")
                     execute_with_retry(self._sb.table("videos").delete().eq("id", video["id"]))
                     execute_with_retry(self._sb.table("scripts").update({"status": "assembly_failed"}).eq("id", video["script_id"]))
                 else:
-                    print(f"[assembler] video {video['id']} S3 error, will retry next run: {exc}")
+                    tlog(f"[assembler] video {video['id']} S3 error, will retry next run: {exc}")
             except Exception as exc:
-                print(f"[assembler] video {video['id']} failed, will retry next run: {exc}")
+                tlog(f"[assembler] video {video['id']} failed, will retry next run: {exc}")

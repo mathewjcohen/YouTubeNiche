@@ -8,6 +8,7 @@ from agents.production.voiceover import VoiceoverAgent
 from agents.production.thumbnail_gen import ThumbnailGenerator
 from agents.production.video_assembler import VideoAssembler, PexelsClient
 from agents.production.uploader import YouTubeUploader
+from agents.shared.tlog import tlog
 
 
 class ProductionRunner:
@@ -17,9 +18,9 @@ class ProductionRunner:
 
     def run(self) -> None:
         enabled = get_app_setting(self._sb, "pipeline_enabled", "true")
-        print(f"[production] pipeline_enabled={enabled}")
+        tlog(f"[production] pipeline_enabled={enabled}")
         if enabled == "false":
-            print("[production] paused via dashboard — exiting")
+            tlog("[production] paused via dashboard — exiting")
             return
 
         niches = execute_with_retry(
@@ -27,17 +28,17 @@ class ProductionRunner:
             .select("*, youtube_accounts(channel_id)")
             .in_("status", ["promoted", "testing"])
         ).data
-        print(f"[production] {len(niches)} active niche(s)")
+        tlog(f"[production] {len(niches)} active niche(s)")
         for niche in niches:
             try:
                 self._process_niche(niche)
             except Exception as exc:
-                print(f"[production] niche '{niche.get('name', niche.get('id'))}' failed: {exc}")
+                tlog(f"[production] niche '{niche.get('name', niche.get('id'))}' failed: {exc}")
 
     def _process_niche(self, niche: dict) -> None:
         niche_id = niche["id"]
         name = niche.get("name", niche_id)
-        print(f"[production] niche '{name}'")
+        tlog(f"[production] niche '{name}'")
 
         agent = VoiceoverAgent(supabase=self._sb, gate_client=self._gate)
         agent.process_approved_scripts(niche_id, limit=1)
@@ -67,16 +68,16 @@ class ProductionRunner:
             uploader = YouTubeUploader(supabase=self._sb, gate_client=self._gate)
             uploader.process_approved_videos(niche_id)
         else:
-            print(f"[production]   skipping upload — '{name}' has no linked channel")
+            tlog(f"[production]   skipping upload — '{name}' has no linked channel")
 
 
 def main() -> None:
-    print("[production] starting")
+    tlog("[production] starting")
     sb = patch_postgrest_http1(create_client(get_env("SUPABASE_URL"), get_env("SUPABASE_SERVICE_KEY")))
     gate = GateClient(sb)
     runner = ProductionRunner(supabase=sb, gate_client=gate)
     runner.run()
-    print("[production] done")
+    tlog("[production] done")
 
 
 if __name__ == "__main__":

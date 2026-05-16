@@ -10,6 +10,7 @@ from supabase import Client
 from agents.shared.gate_client import GateClient, GateNumber
 from agents.shared.db_retry import execute_with_retry
 from agents.shared.config_loader import get_env
+from agents.shared.tlog import tlog
 
 # OpenAI TTS
 OPENAI_TTS_MODEL = "tts-1-hd"
@@ -147,7 +148,7 @@ def _mix_music(audio_path: Path, music_path: Path) -> None:
     music = music.fade_in(1000).fade_out(3000)
     mixed = voice.overlay(music)
     mixed.export(str(audio_path), format="mp3", bitrate="192k")
-    print(f"[voiceover] music bed mixed in ({music_path.name})")
+    tlog(f"[voiceover] music bed mixed in ({music_path.name})")
 
 
 @dataclass
@@ -242,7 +243,7 @@ class VoiceoverAgent:
         from openai import OpenAI
         client = OpenAI(api_key=self._openai_key)
         chunks = _chunk_text(text)
-        print(f"[voiceover] using OpenAI TTS ({OPENAI_TTS_MODEL}/{voice}, {len(chunks)} chunk(s))")
+        tlog(f"[voiceover] using OpenAI TTS ({OPENAI_TTS_MODEL}/{voice}, {len(chunks)} chunk(s))")
         audio_bytes = b""
         for chunk in chunks:
             response = client.audio.speech.create(
@@ -272,13 +273,13 @@ class VoiceoverAgent:
                     try:
                         _mix_music(audio_path, music_path_candidate)
                     except Exception as exc:
-                        print(f"[voiceover] music mix failed, using dry audio: {exc}")
+                        tlog(f"[voiceover] music mix failed, using dry audio: {exc}")
                 return audio_path, srt_path
             except Exception as exc:
                 last_exc = exc
                 if attempt < max_attempts:
                     wait = 2 ** attempt + random.uniform(0, 1)
-                    print(f"[voiceover] synthesis attempt {attempt}/{max_attempts} failed: {exc}; retrying in {wait:.1f}s")
+                    tlog(f"[voiceover] synthesis attempt {attempt}/{max_attempts} failed: {exc}; retrying in {wait:.1f}s")
                     await asyncio.sleep(wait)
         raise last_exc
 
@@ -325,9 +326,9 @@ class VoiceoverAgent:
                     )
                     reset_count += 1
             if reset_count:
-                print(f"[voiceover] reset {reset_count} stuck-processing script(s) for niche {niche_id}")
+                tlog(f"[voiceover] reset {reset_count} stuck-processing script(s) for niche {niche_id}")
         except Exception as e:
-            print(f"[voiceover] stuck-script reset skipped: {e}")
+            tlog(f"[voiceover] stuck-script reset skipped: {e}")
 
         niche_rows = execute_with_retry(
             self._sb.table("niches").select("category").eq("id", niche_id).limit(1)
@@ -346,7 +347,7 @@ class VoiceoverAgent:
         budget_start = time.monotonic()
         for script in scripts:
             if time.monotonic() - budget_start > self._BUDGET_SECS:
-                print(f"[voiceover] time budget exhausted ({self._BUDGET_SECS // 60}min), stopping early")
+                tlog(f"[voiceover] time budget exhausted ({self._BUDGET_SECS // 60}min), stopping early")
                 break
             # Mark processing immediately so a concurrent/restarted agent run won't duplicate
             execute_with_retry(
@@ -363,12 +364,12 @@ class VoiceoverAgent:
                     .limit(1)
                 ).data
                 if existing:
-                    print(f"[voiceover] video row already exists for {stem}, skipping")
+                    tlog(f"[voiceover] video row already exists for {stem}, skipping")
                     continue
                 try:
                     audio_path, srt_path = asyncio.run(self.synthesize(text, stem, category=category))
                 except Exception as exc:
-                    print(f"[voiceover] synthesis failed for {stem} after retries: {exc}; skipping")
+                    tlog(f"[voiceover] synthesis failed for {stem} after retries: {exc}; skipping")
                     continue
                 audio_url = self._upload(audio_path, "audio/mpeg")
                 srt_url = self._upload(srt_path, "text/plain")
@@ -389,13 +390,13 @@ class VoiceoverAgent:
                         )
                     )
                     if not result.data:
-                        print(f"[voiceover] insert returned no data for script {script['id']} ({video_type}), skip")
+                        tlog(f"[voiceover] insert returned no data for script {script['id']} ({video_type}), skip")
                         continue
                     video_id = result.data[0]["id"]
                 except Exception as insert_exc:
                     if "23505" not in str(insert_exc):
                         raise
-                    print(f"[voiceover] video row already existed for {stem} (race/restart) — fetching existing")
+                    tlog(f"[voiceover] video row already existed for {stem} (race/restart) — fetching existing")
                     rows = execute_with_retry(
                         self._sb.table("videos")
                         .select("id")
@@ -404,7 +405,7 @@ class VoiceoverAgent:
                         .limit(1)
                     ).data
                     if not rows:
-                        print(f"[voiceover] could not find existing row for {stem}, skip")
+                        tlog(f"[voiceover] could not find existing row for {stem}, skip")
                         continue
                     video_id = rows[0]["id"]
                 self._gate.advance_or_pause(

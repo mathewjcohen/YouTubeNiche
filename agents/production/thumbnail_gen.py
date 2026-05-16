@@ -7,6 +7,7 @@ from supabase import Client
 from agents.shared.gate_client import GateClient, GateNumber
 from agents.shared.config_loader import get_env
 from agents.production.replicate_client import ReplicateClient
+from agents.shared.tlog import tlog
 
 THUMB_W, THUMB_H = 1280, 720          # long-form 16:9
 SHORT_W, SHORT_H = 1080, 1920         # shorts 9:16
@@ -194,7 +195,7 @@ class ThumbnailGenerator:
             .execute()
             .data
         )
-        print(f"[thumbnail] {len(scripts)} script(s) with video rows for niche {niche_id}")
+        tlog(f"[thumbnail] {len(scripts)} script(s) with video rows for niche {niche_id}")
         for script in scripts:
             category = script["niches"]["category"]
             pending_videos = [v for v in script.get("videos", []) if v.get("gate5_state") != "approved"]
@@ -216,7 +217,7 @@ class ThumbnailGenerator:
                         auto_state="approved",
                         review_state="awaiting_review",
                     )
-                    print(f"[thumbnail] short {video['id'][:8]} — gate5 auto-approved, no thumbnail generated")
+                    tlog(f"[thumbnail] short {video['id'][:8]} — gate5 auto-approved, no thumbnail generated")
                     continue
 
                 try:
@@ -227,11 +228,11 @@ class ThumbnailGenerator:
                         video_type=video_type,
                     )
                 except Exception as exc:
-                    print(f"[thumbnail] render failed for {stem}: {exc}")
+                    tlog(f"[thumbnail] render failed for {stem}: {exc}")
                     continue
                 try:
                     thumb_url = self._upload(out)
-                    print(f"[thumbnail] uploaded → {thumb_url}")
+                    tlog(f"[thumbnail] uploaded → {thumb_url}")
                     self._sb.table("videos").update(
                         {"thumbnail_path": thumb_url}
                     ).eq("id", video["id"]).execute()
@@ -244,6 +245,6 @@ class ThumbnailGenerator:
                         auto_state="approved",
                         review_state="awaiting_review",
                     )
-                    print(f"[thumbnail] updated video row for {stem}")
+                    tlog(f"[thumbnail] updated video row for {stem}")
                 except Exception as exc:
-                    print(f"[thumbnail] upload/db update failed for {stem}: {exc}")
+                    tlog(f"[thumbnail] upload/db update failed for {stem}: {exc}")

@@ -17,6 +17,7 @@ from googleapiclient.errors import HttpError
 
 from agents.shared.gate_client import GateClient
 from agents.shared.db_retry import execute_with_retry
+from agents.shared.tlog import tlog
 
 
 def _is_quota_exceeded(exc: Exception) -> bool:
@@ -126,7 +127,7 @@ class YouTubeUploader:
             except Exception:
                 local_video.unlink(missing_ok=True)
                 local_thumb.unlink(missing_ok=True)
-                print(f"[uploader] thumbnail failed for {video_id} — taking video down for retry next cycle")
+                tlog(f"[uploader] thumbnail failed for {video_id} — taking video down for retry next cycle")
                 self._yt.videos().delete(id=video_id).execute()
                 raise
 
@@ -144,9 +145,9 @@ class YouTubeUploader:
             try:
                 self._sb.storage.from_(bucket).remove(keys)
                 for k in keys:
-                    print(f"[uploader] deleted {bucket}/{k}")
+                    tlog(f"[uploader] deleted {bucket}/{k}")
             except Exception as e:
-                print(f"[uploader] {bucket} cleanup FAILED — video record: {video}")
+                tlog(f"[uploader] {bucket} cleanup FAILED — video record: {video}")
                 raise
 
         def _key_from_url(url: Optional[str], bucket: str) -> Optional[str]:
@@ -184,7 +185,7 @@ class YouTubeUploader:
                 keys = [item["name"] for item in (items or []) if item.get("name", "").startswith(prefix)]
                 _remove("broll", keys)
             except Exception as e:
-                print(f"[uploader] broll list FAILED — video record: {video}")
+                tlog(f"[uploader] broll list FAILED — video record: {video}")
                 raise
 
     def _delete_s3_video(self, video_path: str) -> None:
@@ -195,9 +196,9 @@ class YouTubeUploader:
         key = video_path.split(".amazonaws.com/", 1)[1]
         try:
             boto3.client("s3", region_name=region).delete_object(Bucket=bucket, Key=key)
-            print(f"[uploader] deleted s3://{bucket}/{key}")
+            tlog(f"[uploader] deleted s3://{bucket}/{key}")
         except Exception as e:
-            print(f"[uploader] s3 cleanup failed (non-fatal): {e}")
+            tlog(f"[uploader] s3 cleanup failed (non-fatal): {e}")
 
     def _build_service_for_niche(self, niche_id: str) -> bool:
         """Load per-niche token from Supabase. Returns False if no channel linked."""
@@ -219,7 +220,7 @@ class YouTubeUploader:
         if not account_rows:
             return False
         channel_id = account_rows[0]["channel_id"]
-        print(f"[uploader] niche {niche_id} → channel {channel_id}")
+        tlog(f"[uploader] niche {niche_id} → channel {channel_id}")
         token_dict = account_rows[0]["token_json"]
         self._yt = build_youtube_service(token_dict=token_dict)
         # Persist refreshed token back to Supabase
@@ -244,7 +245,7 @@ class YouTubeUploader:
 
     def process_approved_videos(self, niche_id: str, video_type_filter: Optional[str] = None) -> None:
         if not self._build_service_for_niche(niche_id):
-            print(f"[uploader] niche {niche_id} has no linked YouTube channel — skipping upload")
+            tlog(f"[uploader] niche {niche_id} has no linked YouTube channel — skipping upload")
             return
 
         def _query_type(vtype: str) -> list:
@@ -302,7 +303,7 @@ class YouTubeUploader:
         for video in videos:
             script = video.get("scripts")
             if not script:
-                print(f"[uploader] video {video['id']} has no linked script, skip")
+                tlog(f"[uploader] video {video['id']} has no linked script, skip")
                 continue
 
             # Atomic claim — prevents concurrent pipeline runs from double-uploading the same video
@@ -313,7 +314,7 @@ class YouTubeUploader:
                 .eq("status", "approved")
             ).data
             if not claimed:
-                print(f"[uploader] video {video['id']} already claimed by another runner, skip")
+                tlog(f"[uploader] video {video['id']} already claimed by another runner, skip")
                 continue
 
             try:
@@ -340,8 +341,8 @@ class YouTubeUploader:
 
                 vtype = video["video_type"]
                 yt_url = f"https://www.youtube.com/{'shorts' if vtype == 'short' else 'watch'}?v={yt_id}"
-                print(f"[uploader] ✅ UPLOADED TO YOUTUBE ({vtype}): {script['youtube_title']}")
-                print(f"[uploader]    {yt_url}")
+                tlog(f"[uploader] ✅ UPLOADED TO YOUTUBE ({vtype}): {script['youtube_title']}")
+                tlog(f"[uploader]    {yt_url}")
 
                 if vtype == "long":
                     long_yt_ids[video["script_id"]] = yt_id
@@ -367,7 +368,7 @@ class YouTubeUploader:
                     execute_with_retry(
                         self._sb.table("scripts").update({"status": "done"}).eq("id", video["script_id"])
                     )
-                    print(f"[uploader] script {video['script_id'][:8]} marked done")
+                    tlog(f"[uploader] script {video['script_id'][:8]} marked done")
                 self._delete_s3_video(video["video_path"])
                 self._delete_supabase_assets(video)
             except Exception as e:
@@ -377,7 +378,7 @@ class YouTubeUploader:
                     )
                 except Exception:
                     pass
-                print(f"[uploader] failed for video {video['id']}: {e}")
+                tlog(f"[uploader] failed for video {video['id']}: {e}")
                 if _is_quota_exceeded(e):
                     raise
 
@@ -430,8 +431,8 @@ class YouTubeUploader:
                     is_short=True,
                 )
                 yt_url = f"https://www.youtube.com/shorts/{yt_id}"
-                print(f"[uploader] ✅ UPLOADED TO YOUTUBE (short, orphan): {script['youtube_title']}")
-                print(f"[uploader]    {yt_url}")
+                tlog(f"[uploader] ✅ UPLOADED TO YOUTUBE (short, orphan): {script['youtube_title']}")
+                tlog(f"[uploader]    {yt_url}")
 
                 execute_with_retry(
                     self._sb.table("videos").update({"status": "uploaded"}).eq("id", video["id"])
@@ -454,7 +455,7 @@ class YouTubeUploader:
                     execute_with_retry(
                         self._sb.table("scripts").update({"status": "done"}).eq("id", video["script_id"])
                     )
-                    print(f"[uploader] script {video['script_id'][:8]} marked done")
+                    tlog(f"[uploader] script {video['script_id'][:8]} marked done")
                 self._delete_s3_video(video["video_path"])
                 self._delete_supabase_assets(video)
             except Exception as e:
@@ -464,6 +465,6 @@ class YouTubeUploader:
                     )
                 except Exception:
                     pass
-                print(f"[uploader] failed for orphan short {video['id']}: {e}")
+                tlog(f"[uploader] failed for orphan short {video['id']}: {e}")
                 if _is_quota_exceeded(e):
                     raise

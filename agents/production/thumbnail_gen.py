@@ -81,7 +81,7 @@ def _overlay_text(img: Image.Image, title: str) -> Image.Image:
 
     # Find the largest font where text fits in ≤3 lines within 85% of the zone.
     # chosen_* is updated on every valid iteration so lines and metrics always match.
-    for font_size in range(90 if w >= 1000 else 52, 18, -4):
+    for font_size in range(52, 18, -4):
         font = _find_font(font_size)
         lines = _wrap_text(title, font, max_w, draw)
         if len(lines) > 3:
@@ -131,6 +131,7 @@ def _build_replicate_prompt(title: str, category: str, is_short: bool) -> str:
         f"subject and main focal point positioned in upper two-thirds of frame, "
         f"{style}, ultra-vivid saturated colors, cinematic dramatic lighting, "
         f"high contrast, electric bold color palette, scroll-stopping visual impact, "
+        f"bottom quarter of frame kept visually simple and uncluttered with minimal detail for text overlay readability, "
         f"photorealistic, no text, no words, no captions, no letters"
     )
 

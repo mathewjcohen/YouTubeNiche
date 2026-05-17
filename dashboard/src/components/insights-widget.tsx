@@ -10,6 +10,55 @@ function fmtNum(v: number | null | undefined): string {
   return v.toLocaleString()
 }
 
+function youtubeUrl(id: string, type: string): string {
+  return type === 'short'
+    ? `https://www.youtube.com/shorts/${id}`
+    : `https://www.youtube.com/watch?v=${id}`
+}
+
+function BettermentTable({
+  videos,
+  dim,
+}: {
+  videos: Array<{ youtube_video_id: string; title: string; type: string; views: number; watch_pct: number }>
+  dim?: boolean
+}) {
+  if (videos.length === 0) return null
+  return (
+    <table className="w-full text-xs">
+      <thead>
+        <tr className="text-left text-gray-600 border-b border-gray-700">
+          <th className="pb-1 font-medium">Title</th>
+          <th className="pb-1 font-medium text-right w-16">Views</th>
+          <th className="pb-1 font-medium text-right w-16">Watch %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {videos.map((v) => (
+          <tr key={v.youtube_video_id} className={`border-b border-gray-800 last:border-0 ${dim ? 'opacity-50' : ''}`}>
+            <td className="py-1.5 pr-3">
+              <a
+                href={youtubeUrl(v.youtube_video_id, v.type)}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-400 hover:text-blue-300 hover:underline truncate max-w-[320px] inline-block cursor-pointer"
+                title={v.title}
+              >
+                {v.title.length > 55 ? v.title.slice(0, 52) + '…' : v.title}
+              </a>
+              <span className={`ml-2 text-xs px-1 rounded ${v.type === 'short' ? 'bg-purple-900/40 text-purple-400' : 'bg-blue-900/40 text-blue-400'}`}>
+                {v.type}
+              </span>
+            </td>
+            <td className="py-1.5 text-right text-gray-300">{v.views}</td>
+            <td className="py-1.5 text-right text-gray-300">{fmtPct(v.watch_pct)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
 export function InsightsWidget({ insight }: { insight: Insight | null }) {
   if (!insight) {
     return (
@@ -90,6 +139,45 @@ export function InsightsWidget({ insight }: { insight: Insight | null }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Betterment section */}
+      {(s.top_5_videos?.length > 0 || insight.betterment_text) && (
+        <div className="pt-4 border-t border-gray-700 space-y-4">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Betterment</p>
+
+          {s.top_5_videos?.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-2">Top performers</p>
+              <BettermentTable videos={s.top_5_videos} />
+            </div>
+          )}
+
+          {s.bottom_5_videos?.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-2">Bottom performers</p>
+              <BettermentTable videos={s.bottom_5_videos} dim />
+            </div>
+          )}
+
+          {insight.betterment_text && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-2">What to act on</p>
+              <ul className="space-y-2">
+                {insight.betterment_text
+                  .split('\n')
+                  .map((l) => l.replace(/^[-•*]\s*/, '').trim())
+                  .filter(Boolean)
+                  .map((b, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-gray-300 leading-snug">
+                      <span className="text-green-400 mt-0.5 shrink-0">·</span>
+                      <span>{b}</span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>

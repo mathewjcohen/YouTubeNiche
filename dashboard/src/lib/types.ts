@@ -162,6 +162,7 @@ export interface VideoRecord {
 }
 
 interface VideoSummary {
+  youtube_video_id: string
   title: string
   niche: string
   type: string
@@ -202,6 +203,10 @@ export interface InsightStats {
   }
   top_5_videos: VideoSummary[]
   bottom_5_videos: VideoSummary[]
+  content_patterns?: {
+    winning_angles: string[]
+    avoid: string[]
+  }
 }
 
 export interface Insight {
@@ -210,6 +215,7 @@ export interface Insight {
   period_days: number
   stats_json: InsightStats
   summary_text: string
+  betterment_text: string | null
 }
 
 export type PublishedVideoStatus = 'live' | 'removed' | 'private'

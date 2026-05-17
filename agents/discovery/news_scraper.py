@@ -147,6 +147,9 @@ class NewsScraper:
         self._gate = gate_client
         self._adapters = adapters
         self._keywords = news_keywords if news_keywords is not None else load_news_keywords()
+        self._content_patterns = self._load_content_patterns()
+        if self._content_patterns:
+            print(f"[scraper] loaded content patterns: {len(self._content_patterns.get('winning_angles', []))} winning angles")
 
     def run(self) -> None:
         active_niches = execute_with_retry(
@@ -252,9 +255,36 @@ class NewsScraper:
         )
         print(f"[news] done. total articles fetched: {total_fetched}")
 
+    def _load_content_patterns(self) -> Optional[dict]:
+        try:
+            resp = self._sb.table("insights") \
+                .select("stats_json") \
+                .order("generated_at", desc=True) \
+                .limit(1) \
+                .execute()
+            rows = resp.data or []
+            if not rows:
+                return None
+            patterns = (rows[0].get("stats_json") or {}).get("content_patterns")
+            return patterns if isinstance(patterns, dict) else None
+        except Exception as e:
+            print(f"[scraper] could not load content patterns: {e}")
+            return None
+
     def _score_item(self, item: NewsItem, niche_category: str = "", niche_name: str = "") -> float:
         from agents.shared.anthropic_client import complete
         niche_line = f"Channel niche: {niche_name} ({niche_category})\n" if niche_category else ""
+
+        patterns_block = ""
+        if self._content_patterns:
+            winning = "; ".join(self._content_patterns.get("winning_angles", []))
+            avoid = "; ".join(self._content_patterns.get("avoid", []))
+            patterns_block = (
+                f"\nChannel performance data — use to calibrate your score:\n"
+                f"Proven winning angles: {winning}\n"
+                f"Patterns that underperform: {avoid}\n"
+            )
+
         prompt = (
             f"Rate this news article for YouTube video potential on a channel about real-world stories, "
             f"mistakes, and lessons learned from others' experiences.\n"
@@ -268,6 +298,7 @@ class NewsScraper:
             "- General audience appeal, not industry insider content\n"
             "- Enough detail to sustain a 10-12 minute video\n"
             "- Unrelated topics (tech trends, politics, celebrity gossip) score 1-3\n\n"
+            f"{patterns_block}"
             f"Title: {item.title}\n\n"
             "Return only the integer score."
         )

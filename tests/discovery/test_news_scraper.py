@@ -233,3 +233,72 @@ def test_main_exits_early_when_paused(capsys):
     mock_scraper_cls.return_value.run.assert_not_called()
     captured = capsys.readouterr()
     assert "paused" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Test: _load_content_patterns() returns None when no insights exist
+# ---------------------------------------------------------------------------
+def test_load_content_patterns_returns_none_when_empty():
+    from agents.discovery.news_scraper import NewsScraper
+
+    scraper = NewsScraper.__new__(NewsScraper)
+    mock_sb = MagicMock()
+    mock_sb.table.return_value.select.return_value.order.return_value.limit.return_value.execute.return_value.data = []
+    scraper._sb = mock_sb
+
+    result = scraper._load_content_patterns()
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Test: _load_content_patterns() returns patterns when insights exist
+# ---------------------------------------------------------------------------
+def test_load_content_patterns_returns_patterns():
+    from agents.discovery.news_scraper import NewsScraper
+
+    scraper = NewsScraper.__new__(NewsScraper)
+    mock_sb = MagicMock()
+    patterns = {"winning_angles": ["Personal-stakes finance"], "avoid": ["Curiosity-gap hooks"]}
+    mock_sb.table.return_value.select.return_value.order.return_value.limit.return_value.execute.return_value.data = [
+        {"stats_json": {"content_patterns": patterns}}
+    ]
+    scraper._sb = mock_sb
+
+    result = scraper._load_content_patterns()
+    assert result == patterns
+    assert result["winning_angles"] == ["Personal-stakes finance"]
+
+
+# ---------------------------------------------------------------------------
+# Test: _score_item() prompt includes pattern context when patterns available
+# ---------------------------------------------------------------------------
+def test_score_item_injects_patterns_into_prompt():
+    from agents.discovery.news_scraper import NewsScraper, NewsItem
+    from datetime import datetime, timezone
+
+    scraper = NewsScraper.__new__(NewsScraper)
+    scraper._content_patterns = {
+        "winning_angles": ["Personal-stakes finance"],
+        "avoid": ["Curiosity-gap hooks"]
+    }
+
+    captured_prompt = []
+
+    def fake_complete(prompt, **kwargs):
+        captured_prompt.append(prompt)
+        return "8"
+
+    item = NewsItem(
+        source_type="google_news",
+        source_id="x",
+        title="How Rising Rent Is Crushing Middle-Class Families",
+        url="https://example.com",
+        published_at=datetime(2025, 5, 7, 10, 0, tzinfo=timezone.utc),
+        keywords_matched=[],
+    )
+
+    with patch("agents.shared.anthropic_client.complete", side_effect=fake_complete):
+        scraper._score_item(item, "personal finance", "Finance Channel")
+
+    assert "Personal-stakes finance" in captured_prompt[0]
+    assert "Curiosity-gap hooks" in captured_prompt[0]

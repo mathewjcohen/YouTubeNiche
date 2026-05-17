@@ -125,6 +125,7 @@ class InsightsAgent:
             wc = _word_count(script.get(text_key) if script else None)
 
             results.append({
+                "youtube_video_id": vid,
                 "niche_name": niche_map.get(pv["niche_id"], "Unknown"),
                 "video_type": pv["video_type"],
                 "title": pv.get("title") or vid,
@@ -143,6 +144,19 @@ class InsightsAgent:
     # ------------------------------------------------------------------
     # Stats computation
     # ------------------------------------------------------------------
+
+    def _summary(self, v: dict) -> dict:
+        """Convert a video record to summary format with youtube_video_id."""
+        return {
+            "youtube_video_id": v.get("youtube_video_id") or v["title"],
+            "title": v["title"],
+            "niche": v["niche_name"],
+            "type": v["video_type"],
+            "views": v["views"],
+            "watch_pct": round(v["avg_view_pct"] or 0, 3),
+            "word_count": v["word_count"],
+            "duration_sec": v["duration_sec"],
+        }
 
     def _compute_stats(self, videos: list[dict]) -> dict:
         total_views = sum(v["views"] for v in videos)
@@ -215,17 +229,6 @@ class InsightsAgent:
         with_data = [v for v in videos if v["avg_view_pct"] is not None]
         sorted_by_watch = sorted(with_data, key=lambda x: x["avg_view_pct"], reverse=True)
 
-        def _summary(v: dict) -> dict:
-            return {
-                "title": v["title"],
-                "niche": v["niche_name"],
-                "type": v["video_type"],
-                "views": v["views"],
-                "watch_pct": round(v["avg_view_pct"] or 0, 3),
-                "word_count": v["word_count"],
-                "duration_sec": v["duration_sec"],
-            }
-
         return {
             "period_days": PERIOD_DAYS,
             "total_videos": len(videos),
@@ -235,8 +238,8 @@ class InsightsAgent:
             "by_type": type_stats,
             "by_script_length": bucket_stats,
             "retention": retention_stats,
-            "top_5_videos": [_summary(v) for v in sorted_by_watch[:5]],
-            "bottom_5_videos": [_summary(v) for v in sorted_by_watch[-5:]],
+            "top_5_videos": [self._summary(v) for v in sorted_by_watch[:5]],
+            "bottom_5_videos": [self._summary(v) for v in sorted_by_watch[-5:]],
         }
 
     # ------------------------------------------------------------------
@@ -259,6 +262,49 @@ Be direct and data-driven. Reference actual numbers. No filler or generic advice
 
         return anthropic_client.complete(prompt, max_tokens=1024)
 
+    def _generate_betterment(self, stats: dict) -> dict:
+        """Generate content patterns and narrative from top vs. bottom performers."""
+        empty = {"narrative": "", "content_patterns": {"winning_angles": [], "avoid": []}}
+
+        top = stats.get("top_5_videos", [])
+        bottom = stats.get("bottom_5_videos", [])
+        if not top and not bottom:
+            return empty
+
+        prompt = f"""You are a YouTube content strategist analysing a channel's performance data.
+
+Top performing videos (by watch %):
+{json.dumps(top, indent=2)}
+
+Bottom performing videos (lowest views/watch %):
+{json.dumps(bottom, indent=2)}
+
+Analyse the title style, topic angle, and content type of top vs. bottom performers.
+Return ONLY valid JSON in this exact shape — no markdown, no explanation:
+
+{{
+  "narrative": "3-5 bullet points (one per line, starting with -) about what is working and what to avoid",
+  "content_patterns": {{
+    "winning_angles": ["concise phrase 1", "concise phrase 2"],
+    "avoid": ["pattern to avoid 1", "pattern to avoid 2"]
+  }}
+}}"""
+
+        try:
+            raw = anthropic_client.complete_sonnet(prompt, max_tokens=1024)
+            clean = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            data = json.loads(clean)
+            return {
+                "narrative": data.get("narrative", ""),
+                "content_patterns": {
+                    "winning_angles": data.get("content_patterns", {}).get("winning_angles", []),
+                    "avoid": data.get("content_patterns", {}).get("avoid", []),
+                }
+            }
+        except (json.JSONDecodeError, KeyError) as e:
+            print(f"[insights] betterment parse error: {e}")
+            return empty
+
     # ------------------------------------------------------------------
     # Entry point
     # ------------------------------------------------------------------
@@ -277,11 +323,16 @@ Be direct and data-driven. Reference actual numbers. No filler or generic advice
         print("[insights] generating LLM summary")
         summary = self._generate_summary(stats)
 
+        print("[insights] generating betterment analysis")
+        betterment = self._generate_betterment(stats)
+        stats["content_patterns"] = betterment["content_patterns"]
+
         execute_with_retry(
             self._sb.table("insights").insert({
                 "period_days": PERIOD_DAYS,
                 "stats_json": stats,
                 "summary_text": summary,
+                "betterment_text": betterment["narrative"],
             })
         )
         print("[insights] insights record saved")

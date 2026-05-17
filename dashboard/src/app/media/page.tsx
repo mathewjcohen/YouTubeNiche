@@ -16,7 +16,7 @@ const GATE_LABELS: Record<4 | 5 | 6, string> = {
 }
 
 type VideoRow = Video & {
-  scripts: { youtube_title: string | null; long_form_text: string }
+  scripts: { youtube_title: string | null }
   niches: { name: string }
 }
 
@@ -124,7 +124,7 @@ export default async function MediaPage() {
   if (scriptIds.length > 0) {
     const { data: videos } = await supabase
       .from('videos')
-      .select('*, scripts(youtube_title, long_form_text), niches(name)')
+      .select('*, scripts(youtube_title), niches(name)')
       .in('script_id', scriptIds)
       .order('created_at')
     rows.push(...((videos ?? []) as VideoRow[]))

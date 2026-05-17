@@ -40,8 +40,9 @@ export default async function VideosPage() {
 
   const { data: rows } = await supabase
     .from('published_videos')
-    .select('*')
+    .select('id, niche_id, script_id, youtube_video_id, video_type, title, duration_sec, status, removed_at, uploaded_at')
     .order('uploaded_at', { ascending: false })
+    .limit(500)
 
   const videos = (rows ?? []) as PublishedVideo[]
 

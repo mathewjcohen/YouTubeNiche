@@ -42,14 +42,16 @@ export default async function AnalyticsPage() {
   const [{ data: analyticsRows }, { data: videoRows }] = await Promise.all([
     supabase
       .from('niche_analytics')
-      .select('*')
+      .select('niche_id, polled_at, views_total, impressions, subscribers_gained, likes, avg_watch_time_pct, avg_view_duration_sec, estimated_minutes_watched, videos_published, shorts_published, long_views, long_avg_watch_pct, long_avg_view_duration_sec, short_views, short_avg_watch_pct, short_avg_view_duration_sec, early_promotion_flagged')
       .in('niche_id', nicheIds)
-      .order('polled_at', { ascending: false }),
+      .order('polled_at', { ascending: false })
+      .limit(200),
     supabase
       .from('video_analytics')
-      .select('*')
+      .select('youtube_video_id, niche_id, video_type, polled_at, views, avg_view_pct, avg_view_duration_sec, estimated_minutes_watched, likes')
       .in('niche_id', nicheIds)
-      .order('polled_at', { ascending: false }),
+      .order('polled_at', { ascending: false })
+      .limit(500),
   ])
 
   const latestByNiche: Record<string, NicheAnalytics> = {}

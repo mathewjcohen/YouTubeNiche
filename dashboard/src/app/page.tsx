@@ -57,7 +57,7 @@ async function getHomeData() {
     supabase.from('scripts').select('niche_id, gate3_state'),
     supabase.from('videos').select('niche_id, gate4_state, gate5_state, gate6_state, thumbnail_path'),
     supabase.from('published_videos').select('youtube_video_id, niche_id, video_type, title, duration_sec'),
-    supabase.from('video_analytics').select('youtube_video_id, views, avg_view_pct, avg_view_duration_sec, likes, estimated_minutes_watched, audience_retention_json').order('polled_at', { ascending: false }),
+    supabase.from('video_analytics').select('youtube_video_id, views, avg_view_pct, avg_view_duration_sec, likes, estimated_minutes_watched').order('polled_at', { ascending: false }).limit(500),
     supabase.from('insights').select('*').order('generated_at', { ascending: false }).limit(1),
   ])
 
@@ -134,14 +134,6 @@ async function getHomeData() {
     if (!latestVA.has(row.youtube_video_id)) latestVA.set(row.youtube_video_id, row)
   }
 
-  function retentionDrop50(json: Record<string, number> | null | undefined): number | null {
-    if (!json) return null
-    for (const [k, v] of Object.entries(json).sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))) {
-      if (v < 0.5) return parseFloat(k)
-    }
-    return null
-  }
-
   const videoRecords: VideoRecord[] = (pvRows ?? [])
     .filter((pv) => activeNicheIds.has(pv.niche_id) && latestVA.has(pv.youtube_video_id))
     .map((pv) => {
@@ -158,7 +150,7 @@ async function getHomeData() {
         avg_view_duration_sec: va.avg_view_duration_sec ?? null,
         estimated_minutes_watched: va.estimated_minutes_watched ?? null,
         likes: va.likes ?? 0,
-        retention_50pct: retentionDrop50(va.audience_retention_json as Record<string, number> | null),
+        retention_50pct: null,
       }
     })
     .sort((a, b) => b.views - a.views)

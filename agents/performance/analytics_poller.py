@@ -674,7 +674,7 @@ class AnalyticsPoller:
     def run(self) -> None:
         active_niches = execute_with_retry(
             self._sb.table("niches")
-            .select("*, youtube_accounts(channel_id, token_json)")
+            .select("id, name, status, activated_at, youtube_accounts(channel_id, token_json)")
             .in_("status", ["testing", "promoted"])
         ).data
 

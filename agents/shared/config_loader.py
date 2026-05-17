@@ -3,7 +3,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# Anchor to the project root regardless of CWD
+load_dotenv(Path(__file__).parents[2] / ".env")
 
 def get_env(key: str, required: bool = True) -> str:
     val = os.getenv(key, "").strip()

@@ -259,3 +259,58 @@ def test_build_hashtag_block_empty_returns_empty_string(uploader):
         assert result == ""
     finally:
         uploader_mod.BRAND_HASHTAGS = original
+
+
+def test_process_approved_videos_appends_hashtags_to_description(uploader):
+    niche_id = "niche-uuid-002"
+    video_id = "video-uuid-002"
+    script_id = "script-uuid-002"
+
+    video = {
+        "id": video_id,
+        "script_id": script_id,
+        "niche_id": niche_id,
+        "video_type": "long",
+        "video_path": "https://bucket.s3.us-east-1.amazonaws.com/test.mp4",
+        "thumbnail_path": "https://project.supabase.co/storage/v1/object/public/thumbnails/test.jpg",
+        "audio_path": None,
+        "srt_path": None,
+        "gate6_state": "approved",
+        "status": "approved",
+        "scripts": {
+            "youtube_title": "Test Title",
+            "youtube_description": "Main description here.",
+            "youtube_tags": ["real estate investing"],
+        },
+    }
+
+    uploader._build_service_for_niche = MagicMock(return_value=True)
+
+    with patch("agents.production.uploader.execute_with_retry") as mock_exec:
+        calls = []
+
+        def track_exec(q):
+            calls.append(q)
+            result = MagicMock()
+            if len(calls) == 1:
+                result.data = [{"script_id": script_id}]
+            elif len(calls) == 2:
+                result.data = [video]
+            elif len(calls) == 3:
+                result.data = [{"id": video_id}]
+            else:
+                result.data = []
+            return result
+
+        mock_exec.side_effect = track_exec
+
+        with patch.object(uploader, "upload", return_value="yt-new-id") as mock_upload:
+            with patch.object(uploader, "_delete_s3_video"):
+                with patch.object(uploader, "_delete_supabase_assets"):
+                    uploader.process_approved_videos(niche_id)
+
+    _, kwargs = mock_upload.call_args
+    description = kwargs["description"]
+    last_block = description.rstrip().split("\n\n")[-1]
+    assert last_block.startswith("#"), f"Expected hashtag block at end, got: {last_block!r}"
+    assert "#realestateinvesting" in last_block

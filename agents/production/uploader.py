@@ -340,6 +340,10 @@ class YouTubeUploader:
                         else:
                             description = description.rstrip() + f"\n\n{link_line}"
 
+                hashtag_block = self._build_hashtag_block(script.get("youtube_tags") or [])
+                if hashtag_block:
+                    description = description.rstrip() + f"\n\n{hashtag_block}"
+
                 yt_id = self.upload(
                     video_path=video["video_path"],
                     thumbnail_path=video["thumbnail_path"],
@@ -431,6 +435,10 @@ class YouTubeUploader:
                     description = pre.rstrip() + f"\n\n{link_line}\n\n⚠️ DISCLAIMER:" + post
                 else:
                     description = description.rstrip() + f"\n\n{link_line}"
+
+                hashtag_block = self._build_hashtag_block(script.get("youtube_tags") or [])
+                if hashtag_block:
+                    description = description.rstrip() + f"\n\n{hashtag_block}"
 
                 yt_id = self.upload(
                     video_path=video["video_path"],

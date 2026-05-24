@@ -2,6 +2,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from agents.production.uploader import YouTubeUploader
+import agents.production.uploader as uploader_mod
 
 
 @pytest.fixture
@@ -227,3 +228,34 @@ def test_process_approved_videos_inserts_published_and_deletes_row(uploader):
 
     # long_candidates, all_for_script, claim, update uploaded, insert published, delete row, check remaining, mark done
     assert mock_exec.call_count >= 5
+
+
+def test_build_hashtag_block_formats_tags(uploader):
+    result = uploader._build_hashtag_block(["guitar tutorial", "Fingerpicking", "AI"])
+    assert result.startswith("#")
+    assert "#guitartutorial" in result
+    assert "#fingerpicking" in result
+    assert "#ai" in result
+
+
+def test_build_hashtag_block_appends_brand_tags(uploader):
+    original = uploader_mod.BRAND_HASHTAGS
+    uploader_mod.BRAND_HASHTAGS = ["#TestBrand"]
+    try:
+        result = uploader._build_hashtag_block(["topic"])
+        assert "#topic" in result
+        assert "#TestBrand" in result
+        # Brand tags come after dynamic tags
+        assert result.index("#TestBrand") > result.index("#topic")
+    finally:
+        uploader_mod.BRAND_HASHTAGS = original
+
+
+def test_build_hashtag_block_empty_returns_empty_string(uploader):
+    original = uploader_mod.BRAND_HASHTAGS
+    uploader_mod.BRAND_HASHTAGS = []
+    try:
+        result = uploader._build_hashtag_block([])
+        assert result == ""
+    finally:
+        uploader_mod.BRAND_HASHTAGS = original

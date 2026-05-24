@@ -28,6 +28,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/yt-analytics.readonly",
 ]
 VIDEOS_PER_RUN = 1   # long+short pairs to upload per pipeline run
+BRAND_HASHTAGS = ["#Shorts", "#BeforeItHappensToYou", "#LearnOnYouTube", "#RealWorldEducation"]
 
 
 def build_youtube_service(token_dict: Optional[Dict] = None):
@@ -85,6 +86,15 @@ class YouTubeUploader:
             resp.raise_for_status()
             dest.write_bytes(resp.content)
         return dest
+
+    def _build_hashtag_block(self, tags: List[str]) -> str:
+        dynamic = [
+            f"#{''.join(t.lower().split())}"
+            for t in (tags or [])
+            if t.strip()
+        ][:10]
+        all_tags = dynamic + BRAND_HASHTAGS
+        return " ".join(all_tags) if all_tags else ""
 
     def upload(
         self,

@@ -3,7 +3,6 @@ pydantic>=2.0.0
 supabase>=2.4.0
 pytrends>=4.9.2
 requests>=2.31.0
-praw>=7.7.0
 feedparser>=6.0.0
 beautifulsoup4>=4.12.0
 openai>=1.30.0
@@ -18,4 +17,3 @@ pytest-mock>=3.12.0
 python-dotenv>=1.0.0
 remotion-lambda==4.0.448
 mutagen>=1.47.0
-tuspy>=1.0.0

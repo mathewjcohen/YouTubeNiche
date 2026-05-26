@@ -1,0 +1,7 @@
+-r requirements-analytics.txt
+-r requirements-ai.txt
+Pillow>=10.2.0
+moviepy>=1.0.3,<2.0
+pydub>=0.25.1
+mutagen>=1.47.0
+remotion-lambda==4.0.448

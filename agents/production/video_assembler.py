@@ -60,8 +60,8 @@ def _generate_broll_tags(script_text: str, is_short: bool) -> List[str]:
         tags = json.loads(raw.strip())
         if isinstance(tags, list) and len(tags) > 0:
             return [str(t) for t in tags]
-    except Exception:
-        pass
+    except Exception as exc:
+        tlog(f"[assembler] _generate_broll_tags failed, using fallback: {exc}")
     return BROLL_FALLBACK_TAGS
 
 

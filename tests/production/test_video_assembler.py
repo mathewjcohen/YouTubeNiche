@@ -66,6 +66,81 @@ def test_generate_broll_tags_short_prompt_differs_from_long():
     assert "face" in BROLL_TAGS_PROMPT_SHORT.lower() or "expression" in BROLL_TAGS_PROMPT_SHORT.lower()
 
 
+def test_assemble_uses_llm_tags_not_fallback(tmp_path):
+    """assemble() must call _generate_broll_tags and pass results to Pexels search."""
+    from agents.production.video_assembler import VideoAssembler, PexelsClient
+
+    mock_sb = MagicMock()
+    mock_gate = MagicMock()
+    mock_pexels = MagicMock(spec=PexelsClient)
+    mock_pexels.search_video_urls.return_value = []
+
+    assembler = VideoAssembler(
+        supabase=mock_sb, gate_client=mock_gate,
+        pexels_client=mock_pexels, output_dir=str(tmp_path)
+    )
+
+    with patch("agents.production.video_assembler._generate_broll_tags") as mock_tags, \
+         patch("agents.production.video_assembler.AudioFileClip") as mock_audio, \
+         patch("agents.production.video_assembler.ColorClip") as mock_color, \
+         patch("agents.production.video_assembler.concatenate_videoclips"), \
+         patch.object(assembler, "_upload_video", return_value="https://s3/video.mp4"):
+        mock_tags.return_value = ["stressed person laptop", "lawyer documents"]
+        mock_audio.return_value.duration = 5.0
+        mock_audio.return_value.set_audio = MagicMock()
+        mock_clip = MagicMock()
+        mock_clip.duration = 5.0
+        mock_clip.subclip.return_value = mock_clip
+        mock_color.return_value = mock_clip
+
+        assembler.assemble(
+            audio_path="/tmp/fake.mp3",
+            srt_path="/tmp/fake.srt",
+            script_text="A story about an insurance dispute.",
+            output_stem="test_video",
+            is_short=False,
+        )
+
+    mock_tags.assert_called_once_with("A story about an insurance dispute.", is_short=False)
+    searched_queries = [call.args[0] for call in mock_pexels.search_video_urls.call_args_list]
+    assert "stressed person laptop" in searched_queries
+
+
+def test_short_uses_short_clip_cap(tmp_path):
+    from agents.production.video_assembler import VideoAssembler, PexelsClient, SHORT_MAX_CLIP_SEC
+
+    mock_pexels = MagicMock(spec=PexelsClient)
+    mock_clip = MagicMock()
+    mock_clip.duration = 20.0
+    mock_clip.w = 1080
+    mock_clip.h = 1920
+    mock_pexels.search_video_urls.return_value = ["https://pexels.com/clip.mp4"]
+
+    assembler = VideoAssembler(
+        supabase=MagicMock(), gate_client=MagicMock(),
+        pexels_client=mock_pexels, output_dir=str(tmp_path)
+    )
+
+    with patch("agents.production.video_assembler._generate_broll_tags", return_value=["person stressed"]), \
+         patch("agents.production.video_assembler.AudioFileClip") as mock_audio, \
+         patch("agents.production.video_assembler.VideoFileClip", return_value=mock_clip), \
+         patch("agents.production.video_assembler.concatenate_videoclips"), \
+         patch.object(assembler, "_upload_video", return_value="https://s3/video.mp4"):
+        mock_audio.return_value.duration = 5.0
+        mock_audio.return_value.set_audio = MagicMock()
+
+        assembler.assemble(
+            audio_path="/tmp/fake.mp3",
+            srt_path="/tmp/fake.srt",
+            script_text="Short script.",
+            output_stem="test_short",
+            is_short=True,
+        )
+
+    subclip_calls = mock_clip.subclip.call_args_list
+    assert all(call.args[1] <= SHORT_MAX_CLIP_SEC for call in subclip_calls if len(call.args) >= 2)
+
+
 def test_s3_404_sets_assembly_failed_not_pending():
     """S3 404 on audio must set scripts.status='assembly_failed', not 'pending'.
     Resetting to 'pending' causes the voiceover agent to regenerate audio (burns OpenAI quota).

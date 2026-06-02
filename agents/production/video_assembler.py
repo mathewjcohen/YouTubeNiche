@@ -142,9 +142,7 @@ class VideoAssembler:
     ) -> str:
         target_w = self.SHORT_W if is_short else self.LONG_W
         target_h = self.SHORT_H if is_short else self.LONG_H
-        tags = extract_scene_tags(script_text)
-        if not tags:
-            tags = ["nature background", "city timelapse", "office work"]
+        tags = _generate_broll_tags(script_text, is_short=is_short)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             if audio_path.startswith("http"):

@@ -1,3 +1,4 @@
+import json
 import random
 import re
 import tempfile
@@ -20,12 +21,48 @@ from supabase import Client
 from agents.shared.gate_client import GateClient, GateNumber
 from agents.shared.db_retry import execute_with_retry
 from agents.shared.tlog import tlog
+from agents.shared.anthropic_client import complete
 
 
 BROLL_PATTERN = re.compile(r"\[B-ROLL:\s*(.+?)\]", re.IGNORECASE)
-CLIPS_PER_TAG = 3    # clips fetched per B-ROLL tag
-MAX_CLIP_SEC = 15    # cap clip length so cuts stay snappy
-VIDEOS_PER_RUN = 1   # long+short pairs to assemble per pipeline run
+CLIPS_PER_TAG = 3         # clips fetched per B-ROLL tag
+LONG_MAX_CLIP_SEC = 8     # long-form: moderate pacing
+SHORT_MAX_CLIP_SEC = 4    # shorts: fast cuts aid retention
+VIDEOS_PER_RUN = 1        # long+short pairs to assemble per pipeline run
+
+BROLL_FALLBACK_TAGS = ["stressed person documents", "couple discussing finances", "person at laptop worried"]
+
+BROLL_TAGS_PROMPT_LONG = """Return exactly 8 Pexels video search terms for a YouTube video with this script.
+Terms must feature real people in emotionally relatable situations matching the story's tone.
+Good examples: "stressed person reading letter", "couple arguing over bills", "businesswoman shocked phone call", "man signing legal documents".
+Bad examples: "nature background", "abstract", "city skyline" — no scenery, no objects without people.
+Return ONLY a JSON array of 8 strings. No explanation, no markdown, just the array.
+
+Script:
+{script_text}"""
+
+BROLL_TAGS_PROMPT_SHORT = """Return exactly 6 Pexels video search terms for a YouTube Short with this script.
+Terms must feature people with visible facial expressions — close-up reactions, emotional moments, expressive faces.
+This is critical: YouTube auto-selects thumbnails from video frames, so clips with faces produce better thumbnails.
+Good examples: "shocked woman reading document", "man frustrated at computer", "person covering mouth in disbelief".
+Bad examples: "nature background", "city timelapse", "office building" — no scenery or faceless clips.
+Return ONLY a JSON array of 6 strings. No explanation, no markdown, just the array.
+
+Script:
+{script_text}"""
+
+
+def _generate_broll_tags(script_text: str, is_short: bool) -> List[str]:
+    prompt_template = BROLL_TAGS_PROMPT_SHORT if is_short else BROLL_TAGS_PROMPT_LONG
+    prompt = prompt_template.format(script_text=script_text[:3000])
+    try:
+        raw = complete(prompt, max_tokens=256)
+        tags = json.loads(raw.strip())
+        if isinstance(tags, list) and len(tags) > 0:
+            return [str(t) for t in tags]
+    except Exception:
+        pass
+    return BROLL_FALLBACK_TAGS
 
 
 def extract_scene_tags(script: str) -> List[str]:

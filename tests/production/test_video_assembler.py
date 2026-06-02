@@ -36,6 +36,36 @@ def test_pexels_search_returns_video_urls(tmp_path):
     assert urls == ["https://pexels.com/clip1.mp4"]
 
 
+def test_generate_broll_tags_returns_list_from_valid_json():
+    from agents.production.video_assembler import _generate_broll_tags
+    with patch("agents.production.video_assembler.complete") as mock_llm:
+        mock_llm.return_value = '["stressed person reading letter", "couple arguing over bills", "lawyer at desk"]'
+        tags = _generate_broll_tags("Script about an insurance dispute.", is_short=False)
+    assert tags == ["stressed person reading letter", "couple arguing over bills", "lawyer at desk"]
+
+
+def test_generate_broll_tags_falls_back_on_malformed_json():
+    from agents.production.video_assembler import _generate_broll_tags, BROLL_FALLBACK_TAGS
+    with patch("agents.production.video_assembler.complete") as mock_llm:
+        mock_llm.return_value = "Sorry, here are some terms: person, office, stress"
+        tags = _generate_broll_tags("Some script text.", is_short=False)
+    assert tags == BROLL_FALLBACK_TAGS
+
+
+def test_generate_broll_tags_falls_back_on_empty_array():
+    from agents.production.video_assembler import _generate_broll_tags, BROLL_FALLBACK_TAGS
+    with patch("agents.production.video_assembler.complete") as mock_llm:
+        mock_llm.return_value = "[]"
+        tags = _generate_broll_tags("Some script text.", is_short=False)
+    assert tags == BROLL_FALLBACK_TAGS
+
+
+def test_generate_broll_tags_short_prompt_differs_from_long():
+    """Short prompt should emphasise faces/expressions for thumbnail auto-selection."""
+    from agents.production.video_assembler import BROLL_TAGS_PROMPT_SHORT, BROLL_TAGS_PROMPT_LONG
+    assert "face" in BROLL_TAGS_PROMPT_SHORT.lower() or "expression" in BROLL_TAGS_PROMPT_SHORT.lower()
+
+
 def test_s3_404_sets_assembly_failed_not_pending():
     """S3 404 on audio must set scripts.status='assembly_failed', not 'pending'.
     Resetting to 'pending' causes the voiceover agent to regenerate audio (burns OpenAI quota).

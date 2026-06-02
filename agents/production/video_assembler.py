@@ -174,7 +174,8 @@ class VideoAssembler:
                     try:
                         self._pexels.download_clip(url, dest)
                         raw = VideoFileClip(str(dest))
-                        cap = min(raw.duration, MAX_CLIP_SEC)
+                        max_clip = SHORT_MAX_CLIP_SEC if is_short else LONG_MAX_CLIP_SEC
+                        cap = min(raw.duration, max_clip)
                         sub = raw.subclip(0, cap)
                         # Cover-crop: scale to fill target frame, then center-crop
                         scale = max(target_w / sub.w, target_h / sub.h)

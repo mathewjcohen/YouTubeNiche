@@ -12,11 +12,11 @@ LONG_FORM_PROMPT = """You are writing a script for a faceless YouTube channel ab
 Topic title: {title}
 Source story: {body}
 
-Write a complete video script (~1,800 words, ~12 minutes) in this structure:
+Write a complete video script (~900 words, ~6-7 minutes) in this structure:
 - Hook (30 seconds): open with the most dramatic or surprising moment
-- Context (2 min): background and stakes
-- Story (6 min): detailed narrative, what happened, turning points
-- Lesson (2 min): what the viewer can learn or action they can take
+- Context (1 min): background and stakes
+- Story (3 min): narrative, what happened, key turning point
+- Lesson (1.5 min): what the viewer can learn or action they can take
 - CTA (30 sec): "If this happened to you..." + subscribe line
 
 PRIVACY: Never use real names or usernames from the source story, even if they were posted publicly.
@@ -30,15 +30,15 @@ LONG_FORM_PROMPT_NO_BODY = """You are writing a script for a faceless YouTube ch
 
 Topic: {title}
 
-No source article is available. Write an informative, well-researched video script (~1,800 words, ~12 minutes)
+No source article is available. Write an informative, well-researched video script (~900 words, ~6-7 minutes)
 that a general audience would find genuinely useful. Use your knowledge to provide accurate context, real-world
 examples, and actionable takeaways on this topic.
 
 Structure:
 - Hook (30 seconds): open with a striking fact, question, or scenario that makes the viewer lean in
-- Context (2 min): why this topic matters right now and who it affects
-- Deep dive (6 min): the key facts, mechanisms, or events — explain clearly with concrete examples
-- Lesson (2 min): what the viewer should know or do based on this topic
+- Context (1 min): why this topic matters right now and who it affects
+- Deep dive (3 min): the key facts, mechanisms, or events — explain clearly with concrete examples
+- Lesson (1.5 min): what the viewer should know or do based on this topic
 - CTA (30 sec): "If this affects you..." + subscribe line
 
 CRITICAL: Output ONLY the spoken narration — no title, no section headers, no timestamps,

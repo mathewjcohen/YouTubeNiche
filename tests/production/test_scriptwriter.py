@@ -43,3 +43,16 @@ def test_write_to_db_calls_insert(writer):
     ]
     script_id = writer.write_to_db(pair, topic_id="topic-uuid", niche_id="niche-uuid")
     assert script_id == "script-uuid-123"
+
+
+def test_long_form_prompt_targets_900_words():
+    from agents.production.scriptwriter import LONG_FORM_PROMPT, LONG_FORM_PROMPT_NO_BODY
+    assert "~900 words" in LONG_FORM_PROMPT
+    assert "~6-7 minutes" in LONG_FORM_PROMPT
+    assert "~900 words" in LONG_FORM_PROMPT_NO_BODY
+    assert "~6-7 minutes" in LONG_FORM_PROMPT_NO_BODY
+    # Old length must be gone
+    assert "1,800" not in LONG_FORM_PROMPT
+    assert "12 minutes" not in LONG_FORM_PROMPT
+    assert "1,800" not in LONG_FORM_PROMPT_NO_BODY
+    assert "12 minutes" not in LONG_FORM_PROMPT_NO_BODY

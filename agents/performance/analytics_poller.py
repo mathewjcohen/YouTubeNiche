@@ -108,7 +108,7 @@ class AnalyticsPoller:
         """Returns full published_video rows for a niche."""
         return execute_with_retry(
             self._sb.table("published_videos")
-            .select("youtube_video_id, video_type, title, duration_sec, status")
+            .select("youtube_video_id, video_type, title, duration_sec, status, created_at, script_id")
             .eq("niche_id", niche_id)
             .neq("youtube_video_id", "")
             .not_.is_("youtube_video_id", "null")
@@ -478,6 +478,97 @@ class AnalyticsPoller:
             print(f"[analytics] recovered pipeline video: {v['youtube_video_id']} ({v['video_type']})")
         return len(rows)
 
+    def _flag_and_analyze_zombies(
+        self,
+        niche_id: str,
+        niche_name: str,
+        published_rows: list[dict],
+    ) -> None:
+        """Mark videos >30 days old with zero lifetime views as 'zombie' and log a comparison."""
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+
+        # Sum lifetime views per video from the video_analytics table
+        va_rows = execute_with_retry(
+            self._sb.table("video_analytics")
+            .select("youtube_video_id, views")
+            .eq("niche_id", niche_id)
+        ).data
+        lifetime_views: dict[str, int] = {}
+        for row in va_rows:
+            vid = row["youtube_video_id"]
+            lifetime_views[vid] = lifetime_views.get(vid, 0) + (row["views"] or 0)
+
+        live_rows = [r for r in published_rows if r.get("status") == "live"]
+        new_zombie_ids: set[str] = set()
+        for row in live_rows:
+            raw_ts = row.get("created_at")
+            if not raw_ts:
+                continue
+            try:
+                created = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if created > cutoff:
+                continue
+            if lifetime_views.get(row["youtube_video_id"], 0) == 0:
+                new_zombie_ids.add(row["youtube_video_id"])
+
+        for vid_id in new_zombie_ids:
+            execute_with_retry(
+                self._sb.table("published_videos")
+                .update({"status": "zombie"})
+                .eq("youtube_video_id", vid_id)
+                .eq("niche_id", niche_id)
+            )
+        if new_zombie_ids:
+            print(f"[analytics] flagged {len(new_zombie_ids)} new zombie(s) in niche '{niche_name}'")
+
+        # Comparison: all zombies (new + pre-existing) vs performers
+        all_zombie_ids = new_zombie_ids | {r["youtube_video_id"] for r in published_rows if r.get("status") == "zombie"}
+        zombies = [r for r in published_rows if r["youtube_video_id"] in all_zombie_ids]
+        performers = [r for r in live_rows if lifetime_views.get(r["youtube_video_id"], 0) > 0]
+
+        if not zombies or not performers:
+            return
+
+        def _avg(vals: list[float]) -> float:
+            return sum(vals) / len(vals) if vals else 0.0
+
+        z_dur = _avg([r.get("duration_sec") or 0 for r in zombies])
+        p_dur = _avg([r.get("duration_sec") or 0 for r in performers])
+        z_title = _avg([len(r.get("title") or "") for r in zombies])
+        p_title = _avg([len(r.get("title") or "") for r in performers])
+        z_shorts_pct = sum(1 for r in zombies if r.get("video_type") == "short") / len(zombies) * 100
+        p_shorts_pct = sum(1 for r in performers if r.get("video_type") == "short") / len(performers) * 100
+
+        print(
+            f"[analytics] zombie vs performer — '{niche_name}' "
+            f"({len(zombies)} zombies / {len(performers)} performers):"
+        )
+        print(f"  duration:  zombies {z_dur:.0f}s  |  performers {p_dur:.0f}s")
+        print(f"  title len: zombies {z_title:.0f}c  |  performers {p_title:.0f}c")
+        print(f"  % shorts:  zombies {z_shorts_pct:.0f}%  |  performers {p_shorts_pct:.0f}%")
+
+        # Script word count from long_form_text / short_text
+        all_script_ids = list({r["script_id"] for r in zombies + performers if r.get("script_id")})
+        if not all_script_ids:
+            return
+        try:
+            script_rows = execute_with_retry(
+                self._sb.table("scripts")
+                .select("id, long_form_text, short_text")
+                .in_("id", all_script_ids)
+            ).data
+        except Exception:
+            return
+        wc_map = {
+            s["id"]: len((s.get("long_form_text") or s.get("short_text") or "").split())
+            for s in script_rows
+        }
+        z_wc = _avg([wc_map.get(r["script_id"], 0) for r in zombies if r.get("script_id")])
+        p_wc = _avg([wc_map.get(r["script_id"], 0) for r in performers if r.get("script_id")])
+        print(f"  word count: zombies {z_wc:.0f}w  |  performers {p_wc:.0f}w")
+
     def _aggregate(self, video_metrics: dict[str, dict]) -> tuple[int, float, float, float, int]:
         """Aggregate metrics across a set of videos.
 
@@ -780,6 +871,7 @@ class AnalyticsPoller:
                 }))
 
                 self.poll_videos(niche["id"], analytics, published_rows, start_date, end_date)
+                self._flag_and_analyze_zombies(niche["id"], niche["name"], published_rows)
 
                 activated_at = niche.get("activated_at")
                 if activated_at:

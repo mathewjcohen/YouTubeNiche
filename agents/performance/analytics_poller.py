@@ -124,16 +124,18 @@ class AnalyticsPoller:
         average-of-daily-averages bias of the old day-dimension approach.
         averageViewPercentage is YouTube's own %, so no hardcoded denominator needed.
         """
-        video_ids = [v for v in video_ids if v]
+        video_ids = [v.strip() for v in video_ids if v and v.strip()]
         if not video_ids:
             return {}
+        _filter = f"video=={','.join(video_ids)}"
+        print(f"[analytics DEBUG] querying {len(video_ids)} video(s), filter={_filter!r}")
         result = analytics_service.reports().query(
             ids="channel==MINE",
             startDate=start_date,
             endDate=end_date,
             metrics="views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,likes",
             dimensions="video",
-            filters=f"video=={','.join(video_ids)}",
+            filters=_filter,
         ).execute()
         out: dict[str, dict] = {}
         for row in result.get("rows", []):

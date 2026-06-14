@@ -24,6 +24,9 @@ EARLY_VIEWS_THRESHOLD = 200
 # Audience retention: cap per-video retention fetches to avoid quota exhaustion
 MAX_RETENTION_FETCHES_PER_NICHE = 10
 
+# YouTube Analytics API rejects filter strings with too many video IDs; batch to stay safe
+ANALYTICS_VIDEO_BATCH_SIZE = 200
+
 
 @dataclass
 class NichePerformance:
@@ -127,25 +130,25 @@ class AnalyticsPoller:
         video_ids = [v.strip() for v in video_ids if v and v.strip()]
         if not video_ids:
             return {}
-        _filter = f"video=={','.join(video_ids)}"
-        print(f"[analytics DEBUG] querying {len(video_ids)} video(s), filter={_filter!r}")
-        result = analytics_service.reports().query(
-            ids="channel==MINE",
-            startDate=start_date,
-            endDate=end_date,
-            metrics="views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,likes",
-            dimensions="video",
-            filters=_filter,
-        ).execute()
         out: dict[str, dict] = {}
-        for row in result.get("rows", []):
-            out[row[0]] = {
-                "views": int(row[1]),
-                "estimated_minutes_watched": float(row[2]),
-                "avg_view_duration_sec": float(row[3]),
-                "avg_view_pct": float(row[4]) / 100.0,  # YouTube returns 0–100
-                "likes": int(row[5]),
-            }
+        for i in range(0, len(video_ids), ANALYTICS_VIDEO_BATCH_SIZE):
+            batch = video_ids[i:i + ANALYTICS_VIDEO_BATCH_SIZE]
+            result = analytics_service.reports().query(
+                ids="channel==MINE",
+                startDate=start_date,
+                endDate=end_date,
+                metrics="views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,likes",
+                dimensions="video",
+                filters=f"video=={','.join(batch)}",
+            ).execute()
+            for row in result.get("rows", []):
+                out[row[0]] = {
+                    "views": int(row[1]),
+                    "estimated_minutes_watched": float(row[2]),
+                    "avg_view_duration_sec": float(row[3]),
+                    "avg_view_pct": float(row[4]) / 100.0,  # YouTube returns 0–100
+                    "likes": int(row[5]),
+                }
         return out
 
     def _query_channel_metrics(
@@ -180,26 +183,30 @@ class AnalyticsPoller:
         end_date: str,
     ) -> dict:
         """Fraction of views by traffic source type."""
-        video_ids = [v for v in video_ids if v]
+        video_ids = [v.strip() for v in video_ids if v and v.strip()]
         if not video_ids:
             return {}
+        raw: dict[str, int] = {}
         try:
-            result = analytics_service.reports().query(
-                ids="channel==MINE",
-                startDate=start_date,
-                endDate=end_date,
-                metrics="views",
-                dimensions="trafficSourceType",
-                filters=f"video=={','.join(video_ids)}",
-            ).execute()
-            rows = result.get("rows", [])
-            total = sum(int(r[1]) for r in rows)
-            if not total:
-                return {}
-            return {r[0]: round(int(r[1]) / total, 3) for r in rows}
+            for i in range(0, len(video_ids), ANALYTICS_VIDEO_BATCH_SIZE):
+                batch = video_ids[i:i + ANALYTICS_VIDEO_BATCH_SIZE]
+                result = analytics_service.reports().query(
+                    ids="channel==MINE",
+                    startDate=start_date,
+                    endDate=end_date,
+                    metrics="views",
+                    dimensions="trafficSourceType",
+                    filters=f"video=={','.join(batch)}",
+                ).execute()
+                for row in result.get("rows", []):
+                    raw[row[0]] = raw.get(row[0], 0) + int(row[1])
         except Exception as e:
             print(f"[analytics] traffic source query failed (non-fatal): {e}")
             return {}
+        total = sum(raw.values())
+        if not total:
+            return {}
+        return {k: round(v / total, 3) for k, v in raw.items()}
 
     def _query_top_countries(
         self,
@@ -210,28 +217,31 @@ class AnalyticsPoller:
         top_n: int = 5,
     ) -> dict:
         """Fraction of views by country, top N."""
-        video_ids = [v for v in video_ids if v]
+        video_ids = [v.strip() for v in video_ids if v and v.strip()]
         if not video_ids:
             return {}
+        raw: dict[str, int] = {}
         try:
-            result = analytics_service.reports().query(
-                ids="channel==MINE",
-                startDate=start_date,
-                endDate=end_date,
-                metrics="views",
-                dimensions="country",
-                filters=f"video=={','.join(video_ids)}",
-                sort="-views",
-                maxResults=top_n,
-            ).execute()
-            rows = result.get("rows", [])
-            total = sum(int(r[1]) for r in rows)
-            if not total:
-                return {}
-            return {r[0]: round(int(r[1]) / total, 3) for r in rows}
+            for i in range(0, len(video_ids), ANALYTICS_VIDEO_BATCH_SIZE):
+                batch = video_ids[i:i + ANALYTICS_VIDEO_BATCH_SIZE]
+                result = analytics_service.reports().query(
+                    ids="channel==MINE",
+                    startDate=start_date,
+                    endDate=end_date,
+                    metrics="views",
+                    dimensions="country",
+                    filters=f"video=={','.join(batch)}",
+                ).execute()
+                for row in result.get("rows", []):
+                    raw[row[0]] = raw.get(row[0], 0) + int(row[1])
         except Exception as e:
             print(f"[analytics] country query failed (non-fatal): {e}")
             return {}
+        total = sum(raw.values())
+        if not total:
+            return {}
+        top = sorted(raw.items(), key=lambda x: x[1], reverse=True)[:top_n]
+        return {k: round(v / total, 3) for k, v in top}
 
     def _query_device_types(
         self,
@@ -241,26 +251,30 @@ class AnalyticsPoller:
         end_date: str,
     ) -> dict:
         """Fraction of views by device type."""
-        video_ids = [v for v in video_ids if v]
+        video_ids = [v.strip() for v in video_ids if v and v.strip()]
         if not video_ids:
             return {}
+        raw: dict[str, int] = {}
         try:
-            result = analytics_service.reports().query(
-                ids="channel==MINE",
-                startDate=start_date,
-                endDate=end_date,
-                metrics="views",
-                dimensions="deviceType",
-                filters=f"video=={','.join(video_ids)}",
-            ).execute()
-            rows = result.get("rows", [])
-            total = sum(int(r[1]) for r in rows)
-            if not total:
-                return {}
-            return {r[0]: round(int(r[1]) / total, 3) for r in rows}
+            for i in range(0, len(video_ids), ANALYTICS_VIDEO_BATCH_SIZE):
+                batch = video_ids[i:i + ANALYTICS_VIDEO_BATCH_SIZE]
+                result = analytics_service.reports().query(
+                    ids="channel==MINE",
+                    startDate=start_date,
+                    endDate=end_date,
+                    metrics="views",
+                    dimensions="deviceType",
+                    filters=f"video=={','.join(batch)}",
+                ).execute()
+                for row in result.get("rows", []):
+                    raw[row[0]] = raw.get(row[0], 0) + int(row[1])
         except Exception as e:
             print(f"[analytics] device type query failed (non-fatal): {e}")
             return {}
+        total = sum(raw.values())
+        if not total:
+            return {}
+        return {k: round(v / total, 3) for k, v in raw.items()}
 
     def _query_subscriber_ratio(
         self,
@@ -270,27 +284,32 @@ class AnalyticsPoller:
         end_date: str,
     ) -> float:
         """Fraction of views from subscribed users."""
-        video_ids = [v for v in video_ids if v]
+        video_ids = [v.strip() for v in video_ids if v and v.strip()]
         if not video_ids:
             return 0.0
+        total_views = 0
+        sub_views = 0
         try:
-            result = analytics_service.reports().query(
-                ids="channel==MINE",
-                startDate=start_date,
-                endDate=end_date,
-                metrics="views",
-                dimensions="subscribedStatus",
-                filters=f"video=={','.join(video_ids)}",
-            ).execute()
-            rows = result.get("rows", [])
-            total = sum(int(r[1]) for r in rows)
-            if not total:
-                return 0.0
-            sub_views = next((int(r[1]) for r in rows if r[0] == "SUBSCRIBED"), 0)
-            return round(sub_views / total, 3)
+            for i in range(0, len(video_ids), ANALYTICS_VIDEO_BATCH_SIZE):
+                batch = video_ids[i:i + ANALYTICS_VIDEO_BATCH_SIZE]
+                result = analytics_service.reports().query(
+                    ids="channel==MINE",
+                    startDate=start_date,
+                    endDate=end_date,
+                    metrics="views",
+                    dimensions="subscribedStatus",
+                    filters=f"video=={','.join(batch)}",
+                ).execute()
+                for row in result.get("rows", []):
+                    total_views += int(row[1])
+                    if row[0] == "SUBSCRIBED":
+                        sub_views += int(row[1])
         except Exception as e:
             print(f"[analytics] subscriber ratio query failed (non-fatal): {e}")
             return 0.0
+        if not total_views:
+            return 0.0
+        return round(sub_views / total_views, 3)
 
     def _query_audience_retention(
         self,

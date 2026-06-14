@@ -195,7 +195,7 @@ class AnalyticsPoller:
                     startDate=start_date,
                     endDate=end_date,
                     metrics="views",
-                    dimensions="trafficSourceType",
+                    dimensions="insightTrafficSourceType",
                     filters=f"video=={','.join(batch)}",
                 ).execute()
                 for row in result.get("rows", []):
@@ -283,27 +283,23 @@ class AnalyticsPoller:
         start_date: str,
         end_date: str,
     ) -> float:
-        """Fraction of views from subscribed users."""
-        video_ids = [v.strip() for v in video_ids if v and v.strip()]
+        """Fraction of views from subscribed users (channel-level; video filter not supported by YT Analytics for subscribedStatus)."""
         if not video_ids:
             return 0.0
         total_views = 0
         sub_views = 0
         try:
-            for i in range(0, len(video_ids), ANALYTICS_VIDEO_BATCH_SIZE):
-                batch = video_ids[i:i + ANALYTICS_VIDEO_BATCH_SIZE]
-                result = analytics_service.reports().query(
-                    ids="channel==MINE",
-                    startDate=start_date,
-                    endDate=end_date,
-                    metrics="views",
-                    dimensions="subscribedStatus",
-                    filters=f"video=={','.join(batch)}",
-                ).execute()
-                for row in result.get("rows", []):
-                    total_views += int(row[1])
-                    if row[0] == "SUBSCRIBED":
-                        sub_views += int(row[1])
+            result = analytics_service.reports().query(
+                ids="channel==MINE",
+                startDate=start_date,
+                endDate=end_date,
+                metrics="views",
+                dimensions="subscribedStatus",
+            ).execute()
+            for row in result.get("rows", []):
+                total_views += int(row[1])
+                if row[0] == "SUBSCRIBED":
+                    sub_views += int(row[1])
         except Exception as e:
             print(f"[analytics] subscriber ratio query failed (non-fatal): {e}")
             return 0.0

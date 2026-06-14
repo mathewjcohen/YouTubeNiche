@@ -107,6 +107,8 @@ class AnalyticsPoller:
             self._sb.table("published_videos")
             .select("youtube_video_id, video_type, title, duration_sec, status")
             .eq("niche_id", niche_id)
+            .neq("youtube_video_id", "")
+            .not_.is_("youtube_video_id", "null")
         ).data
 
     def _query_video_metrics(
@@ -122,6 +124,7 @@ class AnalyticsPoller:
         average-of-daily-averages bias of the old day-dimension approach.
         averageViewPercentage is YouTube's own %, so no hardcoded denominator needed.
         """
+        video_ids = [v for v in video_ids if v]
         if not video_ids:
             return {}
         result = analytics_service.reports().query(
@@ -175,6 +178,9 @@ class AnalyticsPoller:
         end_date: str,
     ) -> dict:
         """Fraction of views by traffic source type."""
+        video_ids = [v for v in video_ids if v]
+        if not video_ids:
+            return {}
         try:
             result = analytics_service.reports().query(
                 ids="channel==MINE",
@@ -202,6 +208,9 @@ class AnalyticsPoller:
         top_n: int = 5,
     ) -> dict:
         """Fraction of views by country, top N."""
+        video_ids = [v for v in video_ids if v]
+        if not video_ids:
+            return {}
         try:
             result = analytics_service.reports().query(
                 ids="channel==MINE",
@@ -230,6 +239,9 @@ class AnalyticsPoller:
         end_date: str,
     ) -> dict:
         """Fraction of views by device type."""
+        video_ids = [v for v in video_ids if v]
+        if not video_ids:
+            return {}
         try:
             result = analytics_service.reports().query(
                 ids="channel==MINE",
@@ -256,6 +268,9 @@ class AnalyticsPoller:
         end_date: str,
     ) -> float:
         """Fraction of views from subscribed users."""
+        video_ids = [v for v in video_ids if v]
+        if not video_ids:
+            return 0.0
         try:
             result = analytics_service.reports().query(
                 ids="channel==MINE",

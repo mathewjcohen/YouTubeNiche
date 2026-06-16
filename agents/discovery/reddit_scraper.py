@@ -42,8 +42,17 @@ class RedditScraper:
         timeframe: str = "week",
     ) -> List[RedditPost]:
         url = f"https://www.reddit.com/r/{subreddit}/top.rss"
-        resp = requests.get(url, params={"t": timeframe, "limit": limit}, headers=HEADERS, timeout=10)
-        resp.raise_for_status()
+        for attempt in range(4):
+            resp = requests.get(url, params={"t": timeframe, "limit": limit}, headers=HEADERS, timeout=10)
+            if resp.status_code == 429:
+                wait = 2 ** attempt * 5
+                print(f"[reddit] r/{subreddit} rate limited, retrying in {wait}s (attempt {attempt + 1}/4)")
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            break
+        else:
+            resp.raise_for_status()
 
         feed = feedparser.parse(resp.text)
         posts = []
@@ -74,7 +83,7 @@ class RedditScraper:
             try:
                 posts = self.fetch_top_posts(subreddit, min_body_length)
                 all_posts.extend(posts)
-                time.sleep(1)
+                time.sleep(2)
             except Exception as e:
                 print(f"[reddit] failed for r/{subreddit}: {e}")
         return all_posts

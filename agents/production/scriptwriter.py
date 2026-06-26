@@ -67,9 +67,18 @@ METADATA_PROMPT = """Generate YouTube metadata for this video script.
 Script excerpt (first 500 chars): {excerpt}
 
 Return exactly three lines:
-Line 1: Title (under 70 chars, no clickbait, specific and curiosity-driven)
+Line 1: Title (under 70 chars)
 Line 2: Description (2 sentences that summarize what happened and what the viewer will learn, end with "Like and subscribe for more.")
-Line 3: Tags (8 tags, comma-separated, no spaces around commas)"""
+Line 3: Tags (8 tags, comma-separated, no spaces around commas)
+
+TITLE RULES — this is the most important line:
+Lead with a CONCRETE THING (the scam, loophole, mistake, trap, trick) and add a specific detail.
+Formula: [Specific conflict or discovery]: [Concrete detail]
+
+Good: "Car Auction Scam: No Keys", "GAP Insurance Loophole", "Landlord Kept Deposit: Wrong Move"
+Bad: "Overqualified Leaves You Broke", "One Spouse Handles All the Money" — these are abstract and lose clicks.
+
+Never open with an emotion, a vague outcome, or a person's role. Open with the specific thing that went wrong or the specific advantage the viewer gains."""
 
 DISCLAIMERS: dict[str, str] = {
     "legal": (

@@ -185,7 +185,7 @@ class Scriptwriter:
             youtube_tags=tags,
         )
 
-    def write_to_db(self, pair: ScriptPair, topic_id: str, niche_id: str) -> str:
+    def write_to_db(self, pair: ScriptPair, topic_id: str, niche_id: str, gate3_state: str) -> str:
         result = execute_with_retry(
             self._sb.table("scripts").insert(
                 {
@@ -197,7 +197,7 @@ class Scriptwriter:
                     "youtube_description": pair.youtube_description,
                     "youtube_tags": pair.youtube_tags,
                     "status": "pending",
-                    "gate3_state": "awaiting_review",
+                    "gate3_state": gate3_state,
                 }
             )
         )
@@ -220,6 +220,7 @@ class Scriptwriter:
             print(f"[scriptwriter] niche {niche_id} not found, skip")
             return
         niche = niche_rows[0]
+        gate3_state = "approved" if not self._gate.gate_enabled(GateNumber.SCRIPT, niche_id) else "awaiting_review"
         for topic in topics:
             pair = self.generate(
                 topic_title=topic["title"],
@@ -227,16 +228,7 @@ class Scriptwriter:
                 niche_name=niche["name"],
                 niche_category=niche["category"],
             )
-            script_id = self.write_to_db(pair, topic_id=topic["id"], niche_id=niche_id)
-            self._gate.advance_or_pause(
-                gate=GateNumber.SCRIPT,
-                niche_id=niche_id,
-                table="scripts",
-                item_id=script_id,
-                gate_column="gate3_state",
-                auto_state="approved",
-                review_state="awaiting_review",
-            )
+            self.write_to_db(pair, topic_id=topic["id"], niche_id=niche_id, gate3_state=gate3_state)
             execute_with_retry(
                 self._sb.table("topics").update({"status": "processing"}).eq("id", topic["id"])
             )

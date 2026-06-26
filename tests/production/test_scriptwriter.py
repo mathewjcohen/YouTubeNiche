@@ -41,7 +41,7 @@ def test_write_to_db_calls_insert(writer):
     writer._sb.table.return_value.insert.return_value.execute.return_value.data = [
         {"id": "script-uuid-123"}
     ]
-    script_id = writer.write_to_db(pair, topic_id="topic-uuid", niche_id="niche-uuid")
+    script_id = writer.write_to_db(pair, topic_id="topic-uuid", niche_id="niche-uuid", gate3_state="awaiting_review")
     assert script_id == "script-uuid-123"
 
 

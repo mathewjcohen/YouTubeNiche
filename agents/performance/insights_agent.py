@@ -19,6 +19,7 @@ from agents.shared import anthropic_client
 
 PERIOD_DAYS = 30
 MIN_VIDEOS_FOR_ANALYSIS = 3
+MIN_VIEWS_FOR_SIGNAL = 2  # videos with 0-1 views have no meaningful signal
 
 
 def _word_count(text: Optional[str]) -> int:
@@ -139,7 +140,7 @@ class InsightsAgent:
                 "audience_retention_json": va.get("audience_retention_json"),
             })
 
-        return results
+        return [r for r in results if r["views"] >= MIN_VIEWS_FOR_SIGNAL]
 
     # ------------------------------------------------------------------
     # Stats computation

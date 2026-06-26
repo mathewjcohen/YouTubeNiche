@@ -12,12 +12,12 @@ LONG_FORM_PROMPT = """You are writing a script for a faceless YouTube channel ab
 Topic title: {title}
 Source story: {body}
 
-Write a complete video script (~900 words, ~6-7 minutes) in this structure:
-- Hook (30 seconds): open with the most dramatic or surprising moment
-- Context (1 min): background and stakes
-- Story (3 min): narrative, what happened, key turning point
-- Lesson (1.5 min): what the viewer can learn or action they can take
-- CTA (30 sec): "If this happened to you..." + subscribe line
+Write a complete video script (~400 words, ~3 minutes) in this structure:
+- Hook (20 seconds): open with the most dramatic or surprising moment
+- Context (30 seconds): background and stakes
+- Story (1.5 min): narrative, what happened, key turning point
+- Lesson (45 seconds): what the viewer can learn or action they can take
+- CTA (15 seconds): "If this happened to you..." + subscribe line
 
 PRIVACY: Never use real names or usernames from the source story, even if they were posted publicly.
 Refer to people by role or description only (e.g. "the landlord", "a Reddit user", "the employer").
@@ -30,16 +30,16 @@ LONG_FORM_PROMPT_NO_BODY = """You are writing a script for a faceless YouTube ch
 
 Topic: {title}
 
-No source article is available. Write an informative, well-researched video script (~900 words, ~6-7 minutes)
+No source article is available. Write an informative, well-researched video script (~400 words, ~3 minutes)
 that a general audience would find genuinely useful. Use your knowledge to provide accurate context, real-world
 examples, and actionable takeaways on this topic.
 
 Structure:
-- Hook (30 seconds): open with a striking fact, question, or scenario that makes the viewer lean in
-- Context (1 min): why this topic matters right now and who it affects
-- Deep dive (3 min): the key facts, mechanisms, or events — explain clearly with concrete examples
-- Lesson (1.5 min): what the viewer should know or do based on this topic
-- CTA (30 sec): "If this affects you..." + subscribe line
+- Hook (20 seconds): open with a striking fact, question, or scenario that makes the viewer lean in
+- Context (30 seconds): why this topic matters right now and who it affects
+- Deep dive (1.5 min): the key facts, mechanisms, or events — explain clearly with concrete examples
+- Lesson (45 seconds): what the viewer should know or do based on this topic
+- CTA (15 seconds): "If this affects you..." + subscribe line
 
 CRITICAL: Output ONLY the spoken narration — no title, no section headers, no timestamps,
 no stage directions, no camera notes, no brackets or production metadata of any kind.

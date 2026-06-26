@@ -653,17 +653,17 @@ class AnalyticsPoller:
         type_map = {r["youtube_video_id"]: r["video_type"] for r in published_rows}
         video_metrics = self._query_video_metrics(analytics_service, all_ids, start_date, end_date)
 
-        # Fetch retention for videos that have views, up to the per-niche cap
-        videos_with_views = [
-            vid for vid in all_ids
-            if video_metrics.get(vid, {}).get("views", 0) > 0
-        ][:MAX_RETENTION_FETCHES_PER_NICHE]
-
+        # Fetch retention for all published videos using a lifetime window so videos
+        # that got their views outside the 7-day metrics window still get curves.
+        # YouTube requires ~50+ views before audienceWatchRatio returns data.
         retention_map: dict[str, Optional[dict]] = {}
-        for vid_id in videos_with_views:
-            retention_map[vid_id] = self._query_audience_retention(
-                analytics_service, vid_id, start_date, end_date
+        for vid_id in all_ids[:MAX_RETENTION_FETCHES_PER_NICHE]:
+            curve = self._query_audience_retention(
+                analytics_service, vid_id, "2020-01-01", end_date
             )
+            retention_map[vid_id] = curve
+            if curve is None:
+                print(f"[analytics] no retention data for {vid_id} (insufficient views or too new)")
 
         rows_to_insert = [
             {

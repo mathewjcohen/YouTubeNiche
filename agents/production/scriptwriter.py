@@ -45,11 +45,11 @@ CRITICAL: Output ONLY the spoken narration — no title, no section headers, no 
 no stage directions, no camera notes, no brackets or production metadata of any kind.
 Your response begins with the first spoken word of the narration and ends with the last."""
 
-SHORT_FORM_PROMPT = """You are writing a YouTube Short script (60 seconds, ~200 words) based on this longer script.
+SHORT_FORM_PROMPT = """You are writing a YouTube Short script (45 seconds, ~150 words) based on this longer script.
 
 The Short should:
 - Open with the single most attention-grabbing line from the full story
-- Summarize the key revelation or outcome in 40–50 seconds
+- Summarize the key revelation or outcome in 30–35 seconds
 - End with: "Watch the full story in the description."
 
 Full script for reference:

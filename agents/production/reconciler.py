@@ -8,6 +8,7 @@ from supabase import Client, create_client
 
 from agents.shared.config_loader import get_env
 from agents.shared.db_retry import execute_with_retry, patch_postgrest_http1
+from agents.shared.gate_client import GateClient, GateNumber
 from agents.production.uploader import build_youtube_service, SCOPES
 
 from google.oauth2.credentials import Credentials
@@ -20,6 +21,7 @@ BATCH_SIZE = 50
 class Reconciler:
     def __init__(self, supabase: Client):
         self._sb = supabase
+        self._gate = GateClient(supabase)
 
     def _build_service_for_account(self, account_id: str):
         rows = execute_with_retry(
@@ -50,7 +52,7 @@ class Reconciler:
             print(f"[reconciler] videos.list failed: {e}")
             return set(video_ids)  # assume all live on error to avoid false resets
 
-    def _reset_deleted(self, deleted_rows: list[dict], all_db_videos: list[dict], live_ids: set[str]) -> None:
+    def _reset_deleted(self, niche_id: str, deleted_rows: list[dict], all_db_videos: list[dict], live_ids: set[str]) -> None:
         # Scripts that still have at least one other live upload — treat deletion as a duplicate cleanup
         live_script_ids = {
             v["script_id"] for v in all_db_videos if v["youtube_video_id"] in live_ids
@@ -68,10 +70,11 @@ class Reconciler:
 
         if needs_reset:
             script_ids = list({r["script_id"] for r in needs_reset})
+            gate3_state = "awaiting_review" if self._gate.gate_enabled(GateNumber.SCRIPT, niche_id) else "approved"
             execute_with_retry(
                 self._sb.table("scripts")
                 .update({
-                    "gate3_state": "awaiting_review",
+                    "gate3_state": gate3_state,
                     "status": "pending",
                     "rejection_reason": "YouTube video was deleted — returned for review",
                 })
@@ -121,7 +124,7 @@ class Reconciler:
             for row in deleted_rows:
                 print(f"[reconciler] DELETED  {niche['name']} | {row['video_type']} | {row['youtube_video_id']}")
 
-            self._reset_deleted(deleted_rows, db_videos, live_ids)
+            self._reset_deleted(niche["id"], deleted_rows, db_videos, live_ids)
             total_reset += len(deleted_rows)
             print(f"[reconciler] {niche['name']}: returned {len(deleted_rows)} video(s) to script queue")
 

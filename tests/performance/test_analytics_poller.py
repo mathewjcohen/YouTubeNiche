@@ -153,7 +153,7 @@ def test_flag_and_analyze_zombies_marks_old_zero_view_video(capsys):
     poller = _make_poller()
     published_rows = [
         {"youtube_video_id": "old-zero", "video_type": "short", "title": "Short A",
-         "duration_sec": 45, "status": "live", "created_at": _ts(40), "script_id": None},
+         "duration_sec": 45, "status": "live", "uploaded_at": _ts(40), "script_id": None},
     ]
     # video_analytics returns 0 views for the video; scripts returns empty
     va_result = MagicMock()
@@ -177,7 +177,7 @@ def test_flag_and_analyze_zombies_skips_recent_video(capsys):
     poller = _make_poller()
     published_rows = [
         {"youtube_video_id": "new-zero", "video_type": "short", "title": "New Short",
-         "duration_sec": 45, "status": "live", "created_at": _ts(10), "script_id": None},
+         "duration_sec": 45, "status": "live", "uploaded_at": _ts(10), "script_id": None},
     ]
     va_result = MagicMock()
     va_result.data = [{"youtube_video_id": "new-zero", "views": 0}]
@@ -194,7 +194,7 @@ def test_flag_and_analyze_zombies_skips_video_with_views(capsys):
     poller = _make_poller()
     published_rows = [
         {"youtube_video_id": "old-views", "video_type": "long", "title": "Long A",
-         "duration_sec": 600, "status": "live", "created_at": _ts(40), "script_id": None},
+         "duration_sec": 600, "status": "live", "uploaded_at": _ts(40), "script_id": None},
     ]
     va_result = MagicMock()
     va_result.data = [{"youtube_video_id": "old-views", "views": 50}]
@@ -211,7 +211,7 @@ def test_flag_and_analyze_zombies_skips_already_zombie(capsys):
     poller = _make_poller()
     published_rows = [
         {"youtube_video_id": "already-zombie", "video_type": "short", "title": "Old Short",
-         "duration_sec": 30, "status": "zombie", "created_at": _ts(60), "script_id": None},
+         "duration_sec": 30, "status": "zombie", "uploaded_at": _ts(60), "script_id": None},
     ]
     va_result = MagicMock()
     va_result.data = []  # zero lifetime views
@@ -229,9 +229,9 @@ def test_flag_and_analyze_zombies_prints_comparison_when_both_groups_exist(capsy
     poller = _make_poller()
     published_rows = [
         {"youtube_video_id": "zombie-1", "video_type": "short", "title": "Short Z",
-         "duration_sec": 40, "status": "live", "created_at": _ts(50), "script_id": "s1"},
+         "duration_sec": 40, "status": "live", "uploaded_at": _ts(50), "script_id": "s1"},
         {"youtube_video_id": "performer-1", "video_type": "long", "title": "Long P",
-         "duration_sec": 700, "status": "live", "created_at": _ts(50), "script_id": "s2"},
+         "duration_sec": 700, "status": "live", "uploaded_at": _ts(50), "script_id": "s2"},
     ]
     va_result = MagicMock()
     va_result.data = [

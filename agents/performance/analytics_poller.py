@@ -108,7 +108,7 @@ class AnalyticsPoller:
         """Returns full published_video rows for a niche."""
         return execute_with_retry(
             self._sb.table("published_videos")
-            .select("youtube_video_id, video_type, title, duration_sec, status, created_at, script_id")
+            .select("youtube_video_id, video_type, title, duration_sec, status, uploaded_at, script_id")
             .eq("niche_id", niche_id)
             .neq("youtube_video_id", "")
             .not_.is_("youtube_video_id", "null")
@@ -501,7 +501,7 @@ class AnalyticsPoller:
         live_rows = [r for r in published_rows if r.get("status") == "live"]
         new_zombie_ids: set[str] = set()
         for row in live_rows:
-            raw_ts = row.get("created_at")
+            raw_ts = row.get("uploaded_at")
             if not raw_ts:
                 continue
             try:

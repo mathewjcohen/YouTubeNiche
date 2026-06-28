@@ -256,3 +256,56 @@ def test_flag_and_analyze_zombies_prints_comparison_when_both_groups_exist(capsy
     assert "zombie vs performer" in out
     assert "duration" in out
     assert "word count" in out
+
+
+# --- sync_published_videos ---
+
+def test_sync_published_videos_preserves_zombie_status_when_video_still_live():
+    """A zombie video found on YouTube must not be reset to 'live'."""
+    mock_sb = MagicMock()
+    poller = AnalyticsPoller(supabase=mock_sb)
+
+    yt_service = MagicMock()
+    yt_service.videos().list().execute.return_value = {
+        "items": [{"id": "zombie-vid", "status": {"privacyStatus": "public"}}]
+    }
+
+    published_rows = [
+        {"youtube_video_id": "zombie-vid", "status": "zombie"},
+    ]
+
+    with pytest.MonkeyPatch().context() as mp:
+        calls = []
+        mp.setattr(
+            "agents.performance.analytics_poller.execute_with_retry",
+            lambda q: calls.append(q) or MagicMock(data=[]),
+        )
+        poller._sync_published_videos(yt_service, "niche-1", published_rows)
+
+    assert calls == [], "sync must not issue any DB update for a zombie video still live on YouTube"
+
+
+def test_sync_published_videos_marks_zombie_removed_when_gone_from_youtube():
+    """A zombie video that disappears from YouTube should be marked removed."""
+    mock_sb = MagicMock()
+    poller = AnalyticsPoller(supabase=mock_sb)
+
+    yt_service = MagicMock()
+    yt_service.videos().list().execute.return_value = {"items": []}
+
+    published_rows = [
+        {"youtube_video_id": "gone-zombie", "status": "zombie"},
+    ]
+
+    update_result = MagicMock()
+    update_result.data = []
+
+    with pytest.MonkeyPatch().context() as mp:
+        calls = []
+        mp.setattr(
+            "agents.performance.analytics_poller.execute_with_retry",
+            lambda q: calls.append(q) or update_result,
+        )
+        poller._sync_published_videos(yt_service, "niche-1", published_rows)
+
+    assert len(calls) == 1, "sync must issue one DB update to mark the zombie as removed"

@@ -425,6 +425,9 @@ class AnalyticsPoller:
                     changed += 1
             else:
                 new_status = "private" if returned[vid_id] in ("private", "unlisted") else "live"
+                # zombie is a performance flag — don't overwrite it just because the video is still live on YT
+                if current == "zombie" and new_status == "live":
+                    continue
                 if current != new_status:
                     update: dict = {"status": new_status}
                     if new_status == "live":
